@@ -1,0 +1,4 @@
+interface:
+  display_name: "SEO GEO Agentic Page Auditor"
+  short_description: "Audit, report, and repair agent-ready public pages"
+  default_prompt: "Use $seo-geo-agentic-page-auditor to audit this public page, generate an evidence-based report, and repair its SEO, GEO, social preview, performance, and agentic readiness."

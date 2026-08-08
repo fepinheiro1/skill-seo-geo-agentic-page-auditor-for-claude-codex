@@ -1,0 +1,21 @@
+{
+  "brandName": "Acme Commerce",
+  "eyebrow": "E-commerce guide",
+  "headline": "Build product pages people and agents can understand",
+  "description": "A practical guide to structured content, fast media, and reliable discovery.",
+  "cta": "Read the guide",
+  "logo": "",
+  "visual": "og-visual.example.svg",
+  "colors": {
+    "background": "#0d1024",
+    "surface": "#171b35",
+    "primary": "#6ee7f9",
+    "accent": "#a78bfa",
+    "text": "#ffffff",
+    "muted": "#c7cbe0"
+  },
+  "fonts": {
+    "heading": "",
+    "body": ""
+  }
+}

@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="960" viewBox="0 0 960 960" role="img" aria-labelledby="title description">
+  <title id="title">Commerce performance dashboard illustration</title>
+  <desc id="description">A generic dashboard with a rising line chart and three metric cards.</desc>
+  <defs>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#20294a"/>
+      <stop offset="1" stop-color="#151a35"/>
+    </linearGradient>
+    <linearGradient id="line" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#6ee7f9"/>
+      <stop offset="1" stop-color="#a78bfa"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="13" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="960" height="960" rx="54" fill="#0d1024"/>
+  <rect x="58" y="58" width="844" height="844" rx="40" fill="url(#panel)" stroke="#46517f" stroke-width="2"/>
+  <rect x="100" y="104" width="760" height="86" rx="22" fill="#11162f"/>
+  <circle cx="143" cy="147" r="17" fill="#6ee7f9"/>
+  <rect x="180" y="130" width="230" height="15" rx="8" fill="#f8fafc" opacity=".92"/>
+  <rect x="180" y="156" width="148" height="10" rx="5" fill="#aeb6d5" opacity=".64"/>
+  <g>
+    <rect x="100" y="226" width="228" height="132" rx="24" fill="#11162f" stroke="#343e67"/>
+    <rect x="366" y="226" width="228" height="132" rx="24" fill="#11162f" stroke="#343e67"/>
+    <rect x="632" y="226" width="228" height="132" rx="24" fill="#11162f" stroke="#343e67"/>
+    <rect x="128" y="252" width="86" height="10" rx="5" fill="#9ca6c7"/>
+    <rect x="394" y="252" width="86" height="10" rx="5" fill="#9ca6c7"/>
+    <rect x="660" y="252" width="86" height="10" rx="5" fill="#9ca6c7"/>
+    <rect x="128" y="286" width="144" height="29" rx="8" fill="#6ee7f9" opacity=".92"/>
+    <rect x="394" y="286" width="124" height="29" rx="8" fill="#a78bfa" opacity=".92"/>
+    <rect x="660" y="286" width="156" height="29" rx="8" fill="#f8fafc" opacity=".9"/>
+  </g>
+  <rect x="100" y="398" width="760" height="430" rx="30" fill="#11162f" stroke="#343e67"/>
+  <g stroke="#2d365d" stroke-width="2">
+    <path d="M148 486H812"/><path d="M148 570H812"/><path d="M148 654H812"/><path d="M148 738H812"/>
+  </g>
+  <path d="M150 726C220 705 255 658 318 674S425 621 480 612 572 539 630 552 717 445 810 466" fill="none" stroke="url(#line)" stroke-width="15" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
+  <g fill="#f8fafc" stroke="#6ee7f9" stroke-width="7">
+    <circle cx="150" cy="726" r="12"/><circle cx="318" cy="674" r="12"/><circle cx="480" cy="612" r="12"/><circle cx="630" cy="552" r="12"/><circle cx="810" cy="466" r="12"/>
+  </g>
+</svg>

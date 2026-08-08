@@ -1,0 +1,19 @@
+{
+  "name": "seo-geo-agentic-page-auditor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Agentic SEO/GEO auditor for public pages, crawler rendering checks, social cards, bilingual reports, and developer-ready handoffs.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "audit:page": "node seo-geo-agentic-page-auditor/scripts/audit-public-page.mjs",
+    "audit:sitemap": "python3 seo-geo-agentic-page-auditor/scripts/audit-sitemap.py",
+    "og:generate": "node seo-geo-agentic-page-auditor/scripts/generate-og-image.mjs",
+    "report:html": "node seo-geo-agentic-page-auditor/scripts/render-html-report.mjs",
+    "handoff": "node seo-geo-agentic-page-auditor/scripts/generate-technical-handoff.mjs",
+    "check:syntax": "node --check seo-geo-agentic-page-auditor/scripts/audit-public-page.mjs && node --check seo-geo-agentic-page-auditor/scripts/generate-og-image.mjs && node --check seo-geo-agentic-page-auditor/scripts/generate-technical-handoff.mjs && node --check seo-geo-agentic-page-auditor/scripts/render-html-report.mjs && python3 -m py_compile seo-geo-agentic-page-auditor/scripts/audit-sitemap.py"
+  },
+  "devDependencies": {
+    "playwright": "^1.54.2"
+  }
+}

@@ -1,0 +1,11 @@
+node_modules/
+.DS_Store
+*.log
+reports/
+tmp/
+*.zip
+*.png
+*.jpg
+*.jpeg
+*.webp
+!seo-geo-agentic-page-auditor/assets/*.svg
