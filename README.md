@@ -8,14 +8,19 @@ Methodology maintained by Performa.AI.
 
 ## What It Checks
 
-- Initial HTML versus rendered DOM, especially for React and SPA pages.
-- Crawler responses for browser, Googlebot Smartphone, Bingbot, OAI-SearchBot, Facebook, X, and LinkedIn identities.
-- Indexing fundamentals: status codes, redirects, canonical, robots, title, description, H1, crawlable body content, sitemap posture, and noindex risk.
-- GEO readiness: citation-ready answers, entity clarity, topical clusters, FAQs, visible evidence, and AI-readable page structure.
-- Social previews: Open Graph, Twitter/X cards, image dimensions, card text, deterministic 1200x630 social image generation, and social crawler behavior.
-- Structured data: JSON-LD presence, relevance, visibility match, and common schema traps.
-- Performance: resource weight, hidden media downloads, JavaScript cost, image/video strategy, Core Web Vitals clues, and mobile risk.
-- Agentic readiness: accessibility tree, labels, forms, buttons, links, `llms.txt`, WebMCP posture, and safe action design.
+- Initial HTML versus rendered DOM, especially for React and SPA pages, including content mounted only after scrolling.
+- Crawler responses for browser, Googlebot Smartphone, Bingbot, OAI-SearchBot, Claude-SearchBot, PerplexityBot, Facebook, X, and LinkedIn identities.
+- AI crawler policy: an allow/block matrix over robots.txt for three crawler classes — AI training (GPTBot, ClaudeBot, Google-Extended, Applebot-Extended, Meta-ExternalAgent, CCBot, Amazonbot), AI search (OAI-SearchBot, Claude-SearchBot, PerplexityBot), and user-triggered fetchers (ChatGPT-User, Claude-User, Perplexity-User) — flagging the classic mistake of blocking citation-critical crawlers while intending to block only training.
+- Indexing fundamentals: status codes, redirects, canonical, robots, title, description, H1, document language, crawlable body content, sitemap posture, soft-404 behavior, and noindex risk.
+- Snippet controls: `nosnippet`, `max-snippet`, and `data-nosnippet`, which govern both classic previews and Google AI answers.
+- Internationalization: hreflang code validity, absolute URLs, and self-reference.
+- GEO readiness: citation-ready answers, entity clarity, topical clusters, FAQs, visible evidence, freshness signals, and AI-readable page structure.
+- Social previews: Open Graph, Twitter/X cards, image dimensions and aspect ratio, card text, deterministic 1200x630 social image generation, and social crawler behavior.
+- Structured data: JSON-LD presence, validity, relevance, visibility match, article dates, and common schema traps.
+- Performance: resource weight, hidden media downloads at mobile and desktop viewports, JavaScript cost, main-thread blocking (lab TBT proxy), image/video strategy, Core Web Vitals clues, and mobile risk.
+- Agentic readiness: accessibility tree, labels, forms, buttons, links, `llms.txt` (with an evidence-based posture), WebMCP posture, and safe action design.
+- AI commerce surfaces: crawled product schema versus declared merchant feeds versus agentic checkout, each labeled with its maturity.
+- Sitemap health: per-URL initial HTML, duplicate titles and descriptions, and `lastmod` build-stamping detection.
 
 ## Repository Layout
 

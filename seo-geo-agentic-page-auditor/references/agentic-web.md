@@ -29,18 +29,21 @@ Browser agents often use the accessibility tree as their machine view. Accessibi
 
 Audit robots.txt and infrastructure separately. A permitted crawler can still be blocked by WAF, CDN bot protection, JavaScript challenges, CAPTCHA, authentication, geo rules, or rate limiting.
 
-Test at least:
+Reason about crawlers in three classes, because blocking each class has opposite consequences:
 
-- Googlebot Smartphone;
-- Bingbot;
-- OAI-SearchBot;
-- representative social crawlers.
+| Class | Examples | Blocking means |
+|---|---|---|
+| AI training | GPTBot, ClaudeBot, Google-Extended, Applebot-Extended, Meta-ExternalAgent, CCBot, Amazonbot | a legitimate content policy; citations in AI search are unaffected |
+| AI search index | OAI-SearchBot, Claude-SearchBot, PerplexityBot | the site disappears from those AI answer engines |
+| User-triggered fetchers | ChatGPT-User, Claude-User, Perplexity-User | live page opens from assistants fail; these fetchers may not honor robots.txt because a person initiated the request |
 
-Keep search inclusion controls separate from model-training preferences when providers expose separate crawler identities. Verify current official crawler documentation before editing policies.
+The classic mistake is blocking an AI-search crawler while intending to block only training. `audit-public-page.mjs` records an allow/block matrix for this roster (`origin.aiCrawlerPolicy`) and raises `ai-search-crawler-blocked` when a citation-critical crawler is disallowed.
+
+Test fetches with at least Googlebot Smartphone, Bingbot, OAI-SearchBot, Claude-SearchBot, PerplexityBot, and representative social crawlers. Keep search inclusion controls separate from model-training preferences when providers expose separate crawler identities. Crawler rosters change; verify current official crawler documentation before editing policies.
 
 ## llms.txt
 
-`/llms.txt` is a proposal, not a universal search or ranking standard. Use it as a curated machine-readable navigation aid when the site has high-value documentation or resources.
+`/llms.txt` is a proposal, not a universal search or ranking standard. The evidence as of 2026-08 is unambiguous: adoption sits around 10% of measured domains, crawl-log studies show AI crawlers request the file in roughly 0.1% of their visits, statistical models find no citation effect, Google documented in June 2026 that Search ignores the file entirely, and no major AI provider has committed to reading it in production. Recommend it only as a low-cost curated navigation aid for sites with high-value documentation, state this evidence when the user asks for it, and never present it as a visibility requirement.
 
 If present:
 
@@ -54,7 +57,7 @@ If present:
 
 ## WebMCP
 
-WebMCP is a proposed, experimental standard for exposing browser-visible tools to AI agents. Treat it as progressive enhancement, never as baseline SEO.
+WebMCP is a proposed, experimental standard for exposing browser-visible tools to AI agents. Treat it as progressive enhancement, never as baseline SEO. The same discipline applies to NLWeb (Microsoft's proposal for conversational site interfaces): evaluate it only when the site already has reliable structured data and a concrete conversational use case, and label it experimental.
 
 Consider it when a page contains a concrete user action such as search, filtering, configuration, booking, or checkout and structured invocation materially improves reliability. Do not expose a tool only to pass an audit.
 

@@ -109,7 +109,7 @@ def fetch_bytes(location, timeout):
     return data, Path(location).resolve().as_uri(), 200, {}
 
 
-def sitemap_urls(location, timeout, seen=None):
+def sitemap_entries(location, timeout, seen=None):
     seen = seen or set()
     if location in seen:
         return []
@@ -119,15 +119,32 @@ def sitemap_urls(location, timeout, seen=None):
         raise RuntimeError(f"Sitemap returned HTTP {status}: {location}")
     root = ET.fromstring(data)
     tag = root.tag.rsplit("}", 1)[-1]
-    locations = [element.text.strip() for element in root.iter() if element.tag.rsplit("}", 1)[-1] == "loc" and element.text]
     if tag == "sitemapindex":
-        urls = []
-        for child in locations:
-            urls.extend(sitemap_urls(urllib.parse.urljoin(final_url, child), timeout, seen))
-        return urls
+        entries = []
+        for element in root:
+            if element.tag.rsplit("}", 1)[-1] != "sitemap":
+                continue
+            loc = next((child.text.strip() for child in element if child.tag.rsplit("}", 1)[-1] == "loc" and child.text), None)
+            if loc:
+                entries.extend(sitemap_entries(urllib.parse.urljoin(final_url, loc), timeout, seen))
+        return entries
     if tag != "urlset":
         raise RuntimeError(f"Unsupported sitemap root element: {tag}")
-    return [urllib.parse.urljoin(final_url, value) for value in locations]
+    entries = []
+    for element in root:
+        if element.tag.rsplit("}", 1)[-1] != "url":
+            continue
+        loc = None
+        lastmod = None
+        for child in element:
+            name = child.tag.rsplit("}", 1)[-1]
+            if name == "loc" and child.text:
+                loc = child.text.strip()
+            elif name == "lastmod" and child.text:
+                lastmod = child.text.strip()
+        if loc:
+            entries.append({"url": urllib.parse.urljoin(final_url, loc), "lastmod": lastmod})
+    return entries
 
 
 def audit_url(url, timeout):
@@ -240,18 +257,43 @@ def duplicate_groups(results, key):
 
 def main():
     args = parse_args()
-    urls = list(dict.fromkeys(sitemap_urls(args.sitemap, args.timeout)))
+    entries = []
+    seen_urls = set()
+    for entry in sitemap_entries(args.sitemap, args.timeout):
+        if entry["url"] in seen_urls:
+            continue
+        seen_urls.add(entry["url"])
+        entries.append(entry)
     if args.limit:
-        urls = urls[:args.limit]
+        entries = entries[:args.limit]
+    urls = [entry["url"] for entry in entries]
+    lastmod_by_url = {entry["url"]: entry["lastmod"] for entry in entries}
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, args.workers)) as executor:
         results = list(executor.map(lambda url: audit_url(url, args.timeout), urls))
+    for result in results:
+        result["lastmod"] = lastmod_by_url.get(result["url"])
     issue_counts = Counter(issue.split(":", 1)[0] for result in results for issue in result["issues"])
+
+    # Build stamping detection: identical lastmod across most of the sitemap
+    # usually means the value is regenerated on every build, which destroys its
+    # value as a freshness signal.
+    lastmods = [entry["lastmod"] for entry in entries if entry["lastmod"]]
+    site_issues = []
+    if len(lastmods) >= 20:
+        top_value, top_count = Counter(lastmods).most_common(1)[0]
+        if top_count / len(lastmods) > 0.8:
+            site_issues.append({
+                "code": "lastmod-uniform",
+                "detail": f"{top_count} of {len(lastmods)} lastmod values are identical ({top_value}); this pattern suggests build-time stamping instead of real modification dates.",
+            })
     report = {
         "generatedAt": datetime.now(timezone.utc).isoformat(),
         "sitemap": args.sitemap,
         "urlCount": len(urls),
         "failingUrlCount": sum(1 for result in results if result["issues"]),
         "issueCounts": dict(issue_counts.most_common()),
+        "lastmodCoverage": {"withLastmod": len(lastmods), "total": len(entries)},
+        "siteIssues": site_issues,
         "duplicateTitles": duplicate_groups(results, "title"),
         "duplicateDescriptions": duplicate_groups(results, "description"),
         "results": results,
@@ -260,6 +302,8 @@ def main():
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"Audited {len(urls)} sitemap URLs; {report['failingUrlCount']} have findings.")
+    for site_issue in site_issues:
+        print(f"[SITE] {site_issue['code']}: {site_issue['detail']}")
     print(f"Report: {output}")
     if args.html:
         node = shutil.which("node")

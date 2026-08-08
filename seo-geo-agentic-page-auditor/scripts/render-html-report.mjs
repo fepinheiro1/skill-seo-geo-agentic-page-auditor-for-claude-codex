@@ -824,6 +824,14 @@ function localizedIssueMessage(issue) {
     'missing-h1': 'O HTML inicial não possui H1.',
     'no-internal-links': 'O HTML inicial não possui links internos rastreáveis.',
     'invalid-json-ld': 'Pelo menos um bloco JSON-LD inicial é inválido.',
+    'missing-lang': 'O HTML inicial não declara o idioma do documento (html[lang]).',
+    'missing-json-ld': 'O HTML inicial não contém dados estruturados JSON-LD.',
+    'soft-404': 'Uma URL propositalmente inexistente retornou HTTP 200. Rotas ausentes provavelmente geram soft 404 e poluem o índice.',
+    'robots-disallow-all': 'O robots.txt bloqueia o site inteiro para todos os crawlers.',
+    'sitemap-not-in-robots': 'O robots.txt não declara uma linha Sitemap:.',
+    'snippet-restricted': 'Controles de snippet (nosnippet ou max-snippet:0) removem esta página das prévias de busca e das respostas de IA do Google.',
+    'hreflang-missing-self': 'O conjunto hreflang não referencia a própria página; a autorreferência é obrigatória para um cluster recíproco válido.',
+    'article-missing-dates': 'Os dados estruturados de artigo não trazem datePublished/dateModified nem metas article:; os sinais de frescor estão ausentes.',
     'og-image-unreachable': 'A imagem Open Graph não foi carregada.',
     'canonical-hydration-mismatch': 'A canônica muda depois da renderização JavaScript.',
     'title-hydration-mismatch': 'O título muda depois da renderização JavaScript.',
@@ -838,7 +846,16 @@ function localizedIssueMessage(issue) {
   if (issue.code === 'multiple-h1') return message.replace('The initial HTML has ', 'O HTML inicial possui ').replace(' H1 elements.', ' elementos H1.');
   if (issue.code === 'thin-initial-html') return message.replace('The no-JavaScript main content contains only ', 'O conteúdo principal sem JavaScript possui apenas ').replace(' words. This is a diagnostic heuristic, not a ranking threshold.', ' palavras. Esta é uma heurística de diagnóstico, não um limite de ranqueamento.');
   if (issue.code === 'missing-social-tag') return message.replace('The initial HTML is missing ', 'O HTML inicial não possui ');
-  if (issue.code === 'og-image-dimensions') return message.replace('The Open Graph image is ', 'A imagem Open Graph possui ').replace('; review against the 1200x630 social-card target.', '; compare com o alvo de 1200x630 para cards sociais.');
+  if (issue.code === 'og-image-dimensions') return message.replace('The Open Graph image is ', 'A imagem Open Graph possui ').replace('most platforms expect roughly 1.91:1 at 1200x630 or larger, so review cropping in previews.', 'a maioria das plataformas espera cerca de 1.91:1 em 1200x630 ou maior; revise o corte nas prévias.');
+  if (issue.code === 'robots-txt-unavailable') return message.replace('robots.txt did not return 200 (got ', 'O robots.txt não retornou 200 (obteve ').replace('). Crawlers assume allow-all, but sitemap discovery through robots.txt is unavailable.', '). Crawlers assumem permissão total, mas a descoberta de sitemap via robots.txt fica indisponível.');
+  if (issue.code === 'search-crawler-blocked-robots') return message.replace('robots.txt blocks ', 'O robots.txt bloqueia ').replace(' from crawling this page.', ' de rastrear esta página.');
+  if (issue.code === 'ai-search-crawler-blocked') return message.replace('robots.txt blocks AI search crawlers (', 'O robots.txt bloqueia crawlers de busca de IA (').replace('); the page cannot be cited by those AI answer engines.', '); a página não pode ser citada por esses mecanismos de resposta de IA.');
+  if (issue.code === 'user-fetcher-blocked') return message.replace('robots.txt blocks user-triggered AI fetchers (', 'O robots.txt bloqueia fetchers de IA acionados por usuários (').replace('); live page opens from AI assistants may fail, and these fetchers may not honor robots.txt.', '); aberturas da página ao vivo por assistentes de IA podem falhar, e esses fetchers podem não respeitar o robots.txt.');
+  if (issue.code === 'snippet-limited') return message.replace('max-snippet limits previews to ', 'O max-snippet limita as prévias a ').replace(' characters; confirm this restriction is intentional, because it also constrains AI answers.', ' caracteres; confirme se a restrição é intencional, pois ela também limita as respostas de IA.');
+  if (issue.code === 'data-nosnippet-present') return message.replace(' elements use data-nosnippet; their text is excluded from previews and AI answers. Confirm the exclusion is intentional.', ' elementos usam data-nosnippet; o texto deles fica fora das prévias e das respostas de IA. Confirme se a exclusão é intencional.');
+  if (issue.code === 'hreflang-invalid') return message.replace(' hreflang alternates have invalid language codes or non-absolute URLs.', ' alternates hreflang têm códigos de idioma inválidos ou URLs não absolutas.');
+  if (issue.code === 'main-thread-blocking') return message.replace('Long tasks blocked the main thread for about ', 'Tarefas longas bloquearam a thread principal por cerca de ').replace(' ms in total (lab TBT proxy; good is under roughly 200 ms).', ' ms no total (proxy de TBT em laboratório; bom é abaixo de aproximadamente 200 ms).');
+  if (issue.code === 'hidden-loaded-media-desktop') return message.replace(' additional hidden media elements loaded resources at the desktop viewport (1366x900).', ' elementos de mídia ocultos adicionais carregaram recursos no viewport desktop (1366x900).');
   if (issue.code === 'crawler-divergence') return message.replace(' receives different title or canonical metadata.', ' recebe título ou canônica diferentes.');
   if (issue.code === 'large-script-transfer') return message.replace('Rendered page transferred ', 'A página renderizada transferiu ').replace(' of script resources.', ' em recursos de script.');
   if (issue.code === 'large-image-transfer') return message.replace('Rendered page transferred ', 'A página renderizada transferiu ').replace(' of image resources.', ' em recursos de imagem.');

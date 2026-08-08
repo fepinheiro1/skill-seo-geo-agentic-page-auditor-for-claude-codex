@@ -2,7 +2,7 @@
 
 Verify current guidance before making time-sensitive claims. Prefer these primary sources.
 
-Last reviewed: 2026-08-07.
+Last reviewed: 2026-08-08.
 
 ## Search and rendering
 
@@ -23,6 +23,20 @@ Last reviewed: 2026-08-07.
 - Bing duplicate-content and AI visibility: https://blogs.bing.com/webmaster/December-2025/Does-Duplicate-Content-Hurt-SEO-and-AI-Search-Visibility
 - Bing data-nosnippet support: https://blogs.bing.com/webmaster/October-2025/Bing-Introduces-Support-for-the-data-nosnippet-HTML-Attribute
 - Bing index and grounding: https://blogs.bing.com/search/May-2026/Evolving-role-of-the-index-From-ranking-pages-to-supporting-answers
+
+## Crawler identities and controls
+
+- Google crawler list: https://developers.google.com/search/docs/crawling-indexing/overview-google-crawlers
+- Google robots meta and snippet controls: https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag
+- OpenAI crawlers (GPTBot, OAI-SearchBot, ChatGPT-User): https://platform.openai.com/docs/bots
+- Anthropic crawlers (ClaudeBot, Claude-SearchBot, Claude-User): https://support.claude.com/en/articles/8896518
+- Perplexity crawlers (PerplexityBot, Perplexity-User): https://docs.perplexity.ai/guides/bots
+- Google hreflang / localized versions: https://developers.google.com/search/docs/specialty/international/localized-versions
+
+## AI commerce
+
+- ChatGPT merchants and product feeds: https://chatgpt.com/merchants/
+- OpenAI commerce / Agentic Commerce Protocol: https://developers.openai.com/commerce
 
 ## AI and agentic web
 

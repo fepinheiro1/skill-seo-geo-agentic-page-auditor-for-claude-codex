@@ -1,0 +1,10 @@
+{
+  "name": "seo-geo-agentic-page-auditor",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Deterministic audit scripts for the SEO GEO Agentic Page Auditor skill.",
+  "dependencies": {
+    "playwright": ">=1.45.0"
+  }
+}

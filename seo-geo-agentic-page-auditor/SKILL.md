@@ -25,6 +25,7 @@ Treat a public page as a multi-consumer artifact. Verify what a person, a no-Jav
 - Read [performance-and-assets.md](references/performance-and-assets.md) for Core Web Vitals, scripts, fonts, images, video, hidden components, or loading behavior.
 - Read [structured-data.md](references/structured-data.md) before adding or changing JSON-LD.
 - Read [agentic-web.md](references/agentic-web.md) for AI crawlers, accessibility trees, `llms.txt`, WebMCP, forms, or browser agents.
+- Read [ai-commerce-surfaces.md](references/ai-commerce-surfaces.md) for e-commerce pages that care about AI shopping visibility: crawled product schema, merchant product feeds, and agentic checkout.
 - Read [verification-and-release-gates.md](references/verification-and-release-gates.md) before declaring a page ready.
 - Read [technical-handoff.md](references/technical-handoff.md) when the user wants an implementation brief for a developer or another AI.
 - Read [evidence-sources.md](references/evidence-sources.md) when current standards or claims must be verified online.
@@ -47,7 +48,9 @@ Write concrete success criteria before implementation. For an indexable public p
 
 ### 2. Observe the real response
 
-Run the page auditor when Playwright is available:
+The Node scripts require the `playwright` package. Run them from a directory whose `node_modules` already provides Playwright, or run `npm install` once inside the skill directory (a `package.json` is included) and `npx playwright install chromium` if no Chromium build is present.
+
+Run the page auditor:
 
 ```bash
 node scripts/audit-public-page.mjs \
@@ -57,7 +60,7 @@ node scripts/audit-public-page.mjs \
   --lang pt-BR
 ```
 
-The audit compares no-JavaScript and rendered output, uses search and social crawler identities, records redirects, checks metadata and schema, measures loaded resources, detects meaningful content mounted only after scrolling, and flags crawler divergence. The JSON is the machine-readable evidence source; the self-contained HTML is the responsive, printable stakeholder report. Use production and local URLs when both matter.
+The audit compares no-JavaScript and rendered output, uses search, AI-search, and social crawler identities, records redirects, checks metadata, schema, hreflang, and snippet controls, probes robots.txt (including an allow/block matrix for AI training, AI-search, and user-triggered crawler classes), llms.txt presence, and soft-404 behavior, measures loaded resources at mobile and desktop viewports, detects meaningful content mounted only after scrolling, and flags crawler divergence. The JSON is the machine-readable evidence source; the self-contained HTML is the responsive, printable stakeholder report. Use production and local URLs when both matter.
 
 For a site-wide initial-HTML pass:
 
