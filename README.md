@@ -2,14 +2,14 @@
 
 An agent-ready skill for auditing public web pages across technical SEO, GEO, JavaScript rendering, social previews, Core Web Vitals, structured data, and agentic-web readiness.
 
-The goal is simple: treat a page as a multi-consumer artifact. A browser user, Googlebot, Bingbot, social crawlers, AI crawlers, and browser agents often receive different evidence. This skill helps an AI agent prove what each consumer receives before recommending or applying fixes.
+The goal is simple: treat a page as a multi-consumer artifact. A browser user, search crawlers, social crawlers, AI crawlers, and browser agents may receive different evidence. This skill compares responses to simulated crawler identities and rendered browser behavior before recommending or applying fixes. It does not impersonate or verify requests from official crawler infrastructure.
 
 Methodology maintained by Performa.AI.
 
 ## What It Checks
 
 - Initial HTML versus rendered DOM, especially for React and SPA pages, including content mounted only after scrolling.
-- Crawler responses for browser, Googlebot Smartphone, Bingbot, OAI-SearchBot, Claude-SearchBot, PerplexityBot, Facebook, X, and LinkedIn identities.
+- Responses to simulated browser, Googlebot Smartphone, Bingbot, OAI-SearchBot, Claude-SearchBot, PerplexityBot, Facebook, X, and LinkedIn User-Agents.
 - AI crawler policy: an allow/block matrix over robots.txt for three crawler classes — AI training (GPTBot, ClaudeBot, Google-Extended, Applebot-Extended, Meta-ExternalAgent, CCBot, Amazonbot), AI search (OAI-SearchBot, Claude-SearchBot, PerplexityBot), and user-triggered fetchers (ChatGPT-User, Claude-User, Perplexity-User) — flagging the classic mistake of blocking citation-critical crawlers while intending to block only training.
 - Indexing fundamentals: status codes, redirects, canonical, robots, title, description, H1, document language, crawlable body content, sitemap posture, soft-404 behavior, and noindex risk.
 - Snippet controls: `nosnippet`, `max-snippet`, and `data-nosnippet`, which govern both classic previews and Google AI answers.
@@ -47,6 +47,8 @@ Install dependencies from this repository root:
 npm install
 npx playwright install chromium
 ```
+
+Public-network destinations are enforced by default. For a controlled localhost audit, opt in explicitly with `--allow-private-network`. Do not enable that flag for untrusted URLs or inside a sensitive network.
 
 ## Quick Start
 
@@ -88,13 +90,19 @@ The skill can produce three outputs:
 - A self-contained HTML report, suitable for stakeholders and print/PDF.
 - A technical Markdown handoff, suitable for a developer or another AI agent.
 
+Handoffs redact absolute local paths, distinguish no-JavaScript, hydrated, and post-scroll snapshots, and provide issue-specific recommendations with acceptance criteria and verification steps. Release outcomes use `NEEDS FIXES` whenever a high-priority finding remains.
+
 Reports support `pt-BR` and `en`. Machine-readable issue codes stay in English so results remain comparable across languages.
+
+The HTML report keeps the executive summary concise. Methodology limits and raw evidence remain collapsed under technical details, while the Markdown handoff carries the complete implementation guidance.
 
 ## Privacy And Limits
 
 The scripts run locally and do not include telemetry. Auditing a public URL naturally sends HTTP requests to that site and may appear in its server logs.
 
-This skill cannot guarantee indexing, ranking, rich results, AI citations, or social cache refreshes. It provides evidence, prioritization, and implementation guidance.
+This skill cannot guarantee indexing, ranking, rich results, AI citations, verified crawler access, or social cache refreshes. Its crawler matrix uses simulated User-Agent headers from the audit machine. Laboratory performance does not replace CrUX, RUM or INP field data. Structured-data automation covers syntax and common semantic consistency; official validators and human review remain required.
+
+Use the auditor as one evidence layer, not as a global SEO strategy or a standalone publication authority. Sensitive environments should still run it in an isolated container with outbound network controls.
 
 ## License
 

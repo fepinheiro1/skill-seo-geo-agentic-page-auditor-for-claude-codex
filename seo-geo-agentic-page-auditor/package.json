@@ -1,10 +1,22 @@
 {
   "name": "seo-geo-agentic-page-auditor",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
   "description": "Deterministic audit scripts for the SEO GEO Agentic Page Auditor skill.",
+  "scripts": {
+    "audit:page": "node scripts/audit-public-page.mjs",
+    "audit:sitemap": "python3 scripts/audit-sitemap.py",
+    "og:generate": "node scripts/generate-og-image.mjs",
+    "report:html": "node scripts/render-html-report.mjs",
+    "handoff": "node scripts/generate-technical-handoff.mjs",
+    "check:syntax": "node --check scripts/audit-public-page.mjs && node --check scripts/generate-og-image.mjs && node --check scripts/generate-technical-handoff.mjs && node --check scripts/render-html-report.mjs && python3 -m py_compile scripts/audit-sitemap.py",
+    "test:unit": "node --test tests/unit/*.test.mjs && python3 -m unittest discover -s tests/python -p 'test_*.py'",
+    "test:integration": "node --test tests/integration/*.test.mjs",
+    "test": "npm run check:syntax && npm run test:unit && npm run test:integration"
+  },
   "dependencies": {
-    "playwright": ">=1.45.0"
+    "ipaddr.js": "2.5.0",
+    "playwright": "1.62.1"
   }
 }

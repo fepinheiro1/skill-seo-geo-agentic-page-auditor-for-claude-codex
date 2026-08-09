@@ -4,6 +4,9 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { chromium } from 'playwright';
+import { auditStructuredData } from '../lib/schema-audit.mjs';
+import { evaluateRobots, parseRobots } from '../lib/robots-policy.mjs';
+import { assertSafePublicUrl, createUrlGuard, defaultCanonicalFor, safeFetch, sameUrl } from '../lib/url-safety.mjs';
 import { renderTechnicalHandoff } from './generate-technical-handoff.mjs';
 import { renderHtmlReport } from './render-html-report.mjs';
 
@@ -69,44 +72,78 @@ const HIDDEN_MEDIA_EVAL = () => {
       const rect = element.getBoundingClientRect();
       const source = element.currentSrc || element.src || '';
       const hidden = style.display === 'none' || style.visibility === 'hidden' || rect.width === 0 || rect.height === 0;
+      // Hidden technical iframes are common in analytics and integrations. Only
+      // flag embeds that explicitly expose visual media or player behavior.
+      const visualEmbed = element.tagName !== 'IFRAME'
+        || element.hasAttribute('allowfullscreen')
+        || /\b(autoplay|fullscreen|picture-in-picture)\b/i.test(element.getAttribute('allow') || '')
+        || /\b(video|player|stream|gallery|map)\b/i.test(element.getAttribute('title') || '');
       const loaded = element.tagName === 'IMG'
         ? element.complete && element.naturalWidth > 0
         : element.tagName === 'VIDEO'
           ? element.readyState > 0
           : Boolean(source);
-      return { tag: element.tagName.toLowerCase(), source, hidden, loaded };
+      return { tag: element.tagName.toLowerCase(), source, hidden, loaded, visualEmbed };
     })
-    .filter((item) => item.hidden && item.loaded && item.source);
+    .filter((item) => item.hidden && item.loaded && item.source && item.visualEmbed)
+    .map(({ visualEmbed: _visualEmbed, ...item }) => item);
 };
 
 const args = parseArgs(process.argv.slice(2));
 if (!args.url) {
-  console.error('Usage: node audit-public-page.mjs --url https://example.com/page [--out report.json] [--html report.html] [--handoff handoff.md] [--lang pt-BR|en] [--screenshot page.png]');
+  console.error('Usage: node audit-public-page.mjs --url https://example.com/page [--expected-canonical URL] [--out report.json] [--html report.html] [--handoff handoff.md] [--lang pt-BR|en] [--locale en-US] [--screenshot page.png] [--allow-private-network]');
   process.exit(2);
 }
 
-const targetUrl = new URL(args.url).toString();
+const allowPrivateNetwork = Boolean(args.allowPrivateNetwork);
+let targetUrl;
+let declaredExpectedCanonical;
+try {
+  targetUrl = (await assertSafePublicUrl(args.url, { allowPrivateNetwork })).toString();
+  declaredExpectedCanonical = args.expectedCanonical
+    ? (await assertSafePublicUrl(args.expectedCanonical, { allowPrivateNetwork })).toString()
+    : null;
+} catch (error) {
+  console.error(`Audit aborted: ${error.message}`);
+  process.exit(2);
+}
+const guardUrl = createUrlGuard({ allowPrivateNetwork });
 const browser = await chromium.launch({ headless: true });
 
 try {
   const [noJs, origin] = await Promise.all([
-    Promise.all(USER_AGENTS.map((userAgent) => inspectNoJavaScript(browser, targetUrl, userAgent))),
-    inspectOrigin(targetUrl),
+    Promise.all(USER_AGENTS.map((userAgent) => inspectNoJavaScript(browser, targetUrl, userAgent, guardUrl, args.locale))),
+    inspectOrigin(targetUrl, guardUrl),
   ]);
 
-  const rendered = await inspectRendered(browser, targetUrl, args.screenshot);
-  const renderedDesktop = await inspectDesktopResources(browser, targetUrl);
-  const issues = analyze({ targetUrl, noJs, rendered, renderedDesktop, origin });
+  const rendered = await inspectRendered(browser, targetUrl, args.screenshot, guardUrl, args.locale);
+  const renderedDesktop = await inspectDesktopResources(browser, targetUrl, guardUrl, args.locale);
+  const baselineFinalUrl = noJs.find((entry) => entry.userAgent === 'browser-no-js')?.finalUrl;
+  const expectedCanonical = declaredExpectedCanonical || defaultCanonicalFor(baselineFinalUrl || targetUrl);
+  const robotsTxt = origin?.robotsTxt || null;
+  const auditInput = { targetUrl, expectedCanonical, noJs, rendered, renderedDesktop, origin, robotsTxt };
+  const issues = analyze(auditInput);
   const report = {
+    reportVersion: 2,
     generatedAt: new Date().toISOString(),
     targetUrl,
+    expectedCanonical,
     outcome: outcomeFor(issues),
     issues,
     origin,
+    robotsTxt,
     noJavaScript: noJs,
     rendered,
     renderedDesktop,
+    methodology: {
+      crawlerRequests: 'simulated-user-agent',
+      performance: 'single-run-mobile-and-desktop-lab-observation',
+      fieldData: 'not-collected',
+      structuredData: 'syntax-and-common-semantic-consistency-checks',
+      networkSafety: allowPrivateNetwork ? 'private-network-opt-in' : 'public-network-only',
+    },
   };
+  report.confidence = confidenceFor(report);
 
   if (args.out) {
     await fs.mkdir(path.dirname(path.resolve(args.out)), { recursive: true });
@@ -124,7 +161,7 @@ try {
   }
 
   printSummary(report, args.out, args.html, args.handoff);
-  process.exitCode = report.outcome === 'FAIL' ? 1 : 0;
+  process.exitCode = ['FAIL', 'NEEDS FIXES'].includes(report.outcome) ? 1 : 0;
 } finally {
   await browser.close();
 }
@@ -133,21 +170,39 @@ function parseArgs(values) {
   const parsed = {};
   for (let index = 0; index < values.length; index += 1) {
     const value = values[index];
-    if (value === '--url' || value === '--out' || value === '--html' || value === '--handoff' || value === '--lang' || value === '--screenshot') {
-      parsed[value.slice(2)] = values[index + 1];
+    if (value === '--allow-private-network') {
+      parsed.allowPrivateNetwork = true;
+    } else if (value === '--url' || value === '--out' || value === '--html' || value === '--handoff' || value === '--lang' || value === '--screenshot' || value === '--locale' || value === '--expected-canonical') {
+      const key = value.slice(2).replace(/-([a-z])/g, (_match, letter) => letter.toUpperCase());
+      parsed[key] = values[index + 1];
       index += 1;
     }
   }
   return parsed;
 }
 
-async function inspectNoJavaScript(browserInstance, url, userAgent) {
-  const context = await browserInstance.newContext({
+async function createSecureContext(browserInstance, contextOptions, guard) {
+  const context = await browserInstance.newContext({ ...contextOptions, serviceWorkers: 'block' });
+  await context.route('**/*', async (route) => {
+    const requestUrl = route.request().url();
+    if (!/^https?:/i.test(requestUrl)) return route.continue();
+    try {
+      await guard(requestUrl);
+      return route.continue();
+    } catch {
+      return route.abort('blockedbyclient');
+    }
+  });
+  return context;
+}
+
+async function inspectNoJavaScript(browserInstance, url, userAgent, guard, locale) {
+  const context = await createSecureContext(browserInstance, {
     javaScriptEnabled: false,
     userAgent: userAgent.value,
     viewport: { width: 390, height: 844 },
-    locale: 'en-US',
-  });
+    locale: locale || 'en-US',
+  }, guard);
   const page = await context.newPage();
   const startedAt = Date.now();
 
@@ -177,14 +232,16 @@ async function inspectNoJavaScript(browserInstance, url, userAgent) {
   }
 }
 
-async function inspectOrigin(url) {
+async function inspectOrigin(url, guard) {
   const base = new URL(url);
   const fetchInfo = async (target, bodyLimit = 4000) => {
     try {
-      const response = await fetch(target, {
-        redirect: 'follow',
-        headers: { 'user-agent': USER_AGENTS[0].value },
-        signal: AbortSignal.timeout(15000),
+      const response = await safeFetch(target, {
+        guard,
+        fetchOptions: {
+          headers: { 'user-agent': USER_AGENTS[0].value },
+          signal: AbortSignal.timeout(15000),
+        },
       });
       const body = await response.text();
       return { url: target, status: response.status, finalUrl: response.url, bodySample: body.slice(0, bodyLimit), error: null };
@@ -205,121 +262,38 @@ async function inspectOrigin(url) {
     llmsTxt.note = 'Returned HTML, not Markdown; likely the SPA fallback rather than a real llms.txt.';
   }
 
+  const groups = robotsTxt.status === 200 ? parseRobots(robotsTxt.bodySample) : [];
+  robotsTxt.evaluations = robotsTxt.status === 200
+    ? USER_AGENTS.map((userAgent) => ({
+        userAgent: userAgent.name,
+        ...evaluateRobots(groups, userAgent.value, url),
+      }))
+    : [];
   const aiCrawlerPolicy = robotsTxt.status === 200
-    ? buildAiCrawlerPolicy(robotsTxt.bodySample, base.pathname || '/')
+    ? AI_CRAWLER_ROSTER.map((crawler) => {
+        const verdict = evaluateRobots(groups, crawler.token, url);
+        return {
+          crawler: crawler.token,
+          class: crawler.class,
+          allowed: verdict.allowed,
+          rule: verdict.matchedRule ? `${verdict.matchedRule.directive}: ${verdict.matchedRule.pattern}` : null,
+          matchedGroup: verdict.matchedAgents.join(','),
+        };
+      })
     : null;
   return { robotsTxt, notFoundProbe, llmsTxt, aiCrawlerPolicy };
 }
 
-function parseRobotsGroups(body) {
-  const groups = [];
-  let current = null;
-  let lastWasAgent = false;
-  for (const rawLine of body.split(/\r?\n/)) {
-    const line = rawLine.replace(/#.*$/, '').trim();
-    if (!line) continue;
-    const separator = line.indexOf(':');
-    if (separator === -1) continue;
-    const field = line.slice(0, separator).trim().toLowerCase();
-    const value = line.slice(separator + 1).trim();
-    if (field === 'user-agent') {
-      if (!lastWasAgent || !current) {
-        current = { agents: [], rules: [] };
-        groups.push(current);
-      }
-      current.agents.push(value.toLowerCase());
-      lastWasAgent = true;
-    } else {
-      lastWasAgent = false;
-      if (current && (field === 'allow' || field === 'disallow')) {
-        current.rules.push({ type: field, path: value });
-      }
-    }
-  }
-  return groups;
+function robotsDisallowsAll(body, targetUrl) {
+  return !evaluateRobots(parseRobots(body), 'generic-crawler', targetUrl).allowed;
 }
 
-function robotsRuleMatches(rulePath, targetPath) {
-  if (!rulePath) return false;
-  const pattern = rulePath
-    .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
-    .replace(/\*/g, '.*');
-  const anchored = pattern.endsWith('\\$') ? `^${pattern.slice(0, -2)}$` : `^${pattern}`;
-  try {
-    return new RegExp(anchored).test(targetPath);
-  } catch {
-    return false;
-  }
-}
-
-function robotsAllows(groups, agentToken, targetPath) {
-  const token = agentToken.toLowerCase();
-  // Group selection: most specific matching user-agent line wins; '*' is the fallback.
-  let selected = null;
-  let selectedSpecificity = -1;
-  for (const group of groups) {
-    for (const agent of group.agents) {
-      if (agent === '*') {
-        if (selectedSpecificity < 0) { selected = group; selectedSpecificity = 0; }
-      } else if (token === agent || token.startsWith(agent)) {
-        // A group applies when its name is a prefix of the crawler token
-        // ('perplexity' covers PerplexityBot); a longer group name such as
-        // 'googlebot-image' must NOT capture the generic Googlebot.
-        if (agent.length > selectedSpecificity) { selected = group; selectedSpecificity = agent.length; }
-      }
-    }
-  }
-  if (!selected) return { allowed: true, matchedBy: null };
-  // Rule selection: longest matching path wins; on a tie, allow wins.
-  let best = null;
-  for (const rule of selected.rules) {
-    if (!robotsRuleMatches(rule.path, targetPath)) continue;
-    if (!best
-      || rule.path.length > best.path.length
-      || (rule.path.length === best.path.length && rule.type === 'allow' && best.type === 'disallow')) {
-      best = rule;
-    }
-  }
-  if (!best) return { allowed: true, matchedBy: selected.agents.join(',') };
-  return { allowed: best.type === 'allow', matchedBy: selected.agents.join(','), rule: `${best.type}: ${best.path}` };
-}
-
-function buildAiCrawlerPolicy(robotsBody, targetPath) {
-  const groups = parseRobotsGroups(robotsBody);
-  return AI_CRAWLER_ROSTER.map((crawler) => {
-    const verdict = robotsAllows(groups, crawler.token, targetPath);
-    return { crawler: crawler.token, class: crawler.class, allowed: verdict.allowed, rule: verdict.rule || null, matchedGroup: verdict.matchedBy };
-  });
-}
-
-function robotsDisallowsAll(body) {
-  let appliesToAll = false;
-  let inAgentGroup = false;
-  for (const rawLine of body.split(/\r?\n/)) {
-    const line = rawLine.replace(/#.*$/, '').trim();
-    if (!line) continue;
-    const separator = line.indexOf(':');
-    if (separator === -1) continue;
-    const field = line.slice(0, separator).trim().toLowerCase();
-    const value = line.slice(separator + 1).trim();
-    if (field === 'user-agent') {
-      if (!inAgentGroup) appliesToAll = false;
-      inAgentGroup = true;
-      if (value === '*') appliesToAll = true;
-    } else {
-      inAgentGroup = false;
-      if (field === 'disallow' && appliesToAll && value === '/') return true;
-    }
-  }
-  return false;
-}
-
-async function inspectRendered(browserInstance, url, screenshotPath) {
-  const context = await browserInstance.newContext({
+async function inspectRendered(browserInstance, url, screenshotPath, guard, locale) {
+  const context = await createSecureContext(browserInstance, {
     viewport: { width: 390, height: 844 },
     deviceScaleFactor: 1,
-    locale: 'en-US',
-  });
+    locale: locale || 'en-US',
+  }, guard);
   const page = await context.newPage();
   const pageErrors = [];
   const consoleErrors = [];
@@ -358,8 +332,12 @@ async function inspectRendered(browserInstance, url, screenshotPath) {
 
   const preScroll = await page.evaluate(() => {
     const text = (document.querySelector('main')?.innerText || document.body?.innerText || '').replace(/\s+/g, ' ').trim();
+    const locale = document.documentElement.lang || navigator.language || 'en';
+    const wordCount = typeof Intl?.Segmenter === 'function'
+      ? [...new Intl.Segmenter(locale, { granularity: 'word' }).segment(text)].filter((entry) => entry.isWordLike).length
+      : text ? text.split(/\s+/).length : 0;
     return {
-      wordCount: text ? text.split(/\s+/).length : 0,
+      wordCount,
       sections: document.querySelectorAll('section').length,
       height: document.body.scrollHeight,
       vitalsAtLoad: window.__agenticSeoVitals
@@ -431,10 +409,15 @@ async function inspectRendered(browserInstance, url, screenshotPath) {
     return [...document.querySelectorAll('a[href], button, input, textarea, select, [role="button"], [role="link"]')]
       .map((element) => {
         const labels = 'labels' in element && element.labels ? [...element.labels].map((label) => label.innerText).join(' ') : '';
+        const descendantImageAlts = [...element.querySelectorAll('img[alt]')]
+          .map((image) => image.getAttribute('alt') || '')
+          .filter(Boolean)
+          .join(' ');
         const name = element.getAttribute('aria-label')
           || element.getAttribute('aria-labelledby')?.split(/\s+/).map((id) => document.getElementById(id)?.innerText || '').join(' ')
           || labels
           || element.innerText
+          || descendantImageAlts
           || element.getAttribute('alt')
           || element.getAttribute('title')
           || '';
@@ -474,11 +457,11 @@ async function inspectRendered(browserInstance, url, screenshotPath) {
 
 // Light desktop pass: the mobile audit cannot see desktop-only hidden media,
 // and the doctrine requires checking hidden resources at both viewports.
-async function inspectDesktopResources(browserInstance, url) {
-  const context = await browserInstance.newContext({
+async function inspectDesktopResources(browserInstance, url, guard, locale) {
+  const context = await createSecureContext(browserInstance, {
     viewport: { width: 1366, height: 900 },
-    locale: 'en-US',
-  });
+    locale: locale || 'en-US',
+  }, guard);
   const page = await context.newPage();
   try {
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
@@ -516,8 +499,12 @@ async function inspectScrollDependentContent(page, before) {
     await page.waitForTimeout(180);
     const current = await page.evaluate(() => {
       const text = (document.querySelector('main')?.innerText || document.body?.innerText || '').replace(/\s+/g, ' ').trim();
+      const locale = document.documentElement.lang || navigator.language || 'en';
+      const wordCount = typeof Intl?.Segmenter === 'function'
+        ? [...new Intl.Segmenter(locale, { granularity: 'word' }).segment(text)].filter((entry) => entry.isWordLike).length
+        : text ? text.split(/\s+/).length : 0;
       return {
-        wordCount: text ? text.split(/\s+/).length : 0,
+        wordCount,
         sections: document.querySelectorAll('section').length,
         height: document.body.scrollHeight,
       };
@@ -536,6 +523,13 @@ async function inspectScrollDependentContent(page, before) {
 
 async function collectDocument(page, inspectSocialImage) {
   const documentData = await page.evaluate(() => {
+    const countWords = (text) => {
+      const locale = document.documentElement.lang || navigator.language || 'en';
+      if (typeof Intl?.Segmenter === 'function') {
+        return [...new Intl.Segmenter(locale, { granularity: 'word' }).segment(text)].filter((entry) => entry.isWordLike).length;
+      }
+      return text ? text.split(/\s+/).length : 0;
+    };
     const meta = {};
     for (const element of document.querySelectorAll('meta[name], meta[property]')) {
       const key = element.getAttribute('name') || element.getAttribute('property');
@@ -557,6 +551,7 @@ async function collectDocument(page, inspectSocialImage) {
           valid: true,
           types: values.flatMap((value) => value?.['@type'] || []).filter(Boolean),
           hasDates: values.some((value) => Boolean(value?.datePublished || value?.dateModified)),
+          value: parsed,
         };
       } catch (error) {
         return { index, valid: false, error: error.message, types: [], hasDates: false };
@@ -586,7 +581,8 @@ async function collectDocument(page, inspectSocialImage) {
         text: element.innerText.replace(/\s+/g, ' ').trim(),
       })).slice(0, 100),
       bodyTextSample: bodyText.slice(0, 1200),
-      wordCount: bodyText ? bodyText.split(/\s+/).length : 0,
+      visibleText: bodyText.slice(0, 50000),
+      wordCount: countWords(bodyText),
       links: {
         total: links.length,
         internal: links.filter((link) => {
@@ -643,7 +639,7 @@ function analyze(report) {
 
   const robotsTxt = report.origin?.robotsTxt;
   if (robotsTxt) {
-    if (robotsTxt.status === 200 && robotsDisallowsAll(robotsTxt.bodySample)) {
+    if (robotsTxt.status === 200 && robotsDisallowsAll(robotsTxt.bodySample, report.targetUrl)) {
       add('BLOCKER', 'robots-disallow-all', 'robots.txt disallows the entire site for all crawlers.', robotsTxt.url);
     } else if (robotsTxt.status !== 200) {
       add('LOW', 'robots-txt-unavailable', `robots.txt did not return 200 (got ${robotsTxt.status ?? robotsTxt.error}). Crawlers assume allow-all, but sitemap discovery through robots.txt is unavailable.`, robotsTxt.url);
@@ -655,7 +651,7 @@ function analyze(report) {
 
   // When robots.txt disallows the whole site, the disallow-all BLOCKER already
   // covers every crawler class; per-class issues would only add noise.
-  const disallowAll = robotsTxt?.status === 200 && robotsDisallowsAll(robotsTxt.bodySample);
+  const disallowAll = robotsTxt?.status === 200 && robotsDisallowsAll(robotsTxt.bodySample, report.targetUrl);
   const policy = disallowAll ? null : report.origin?.aiCrawlerPolicy;
   if (policy) {
     const blockedBy = (klass) => policy.filter((entry) => entry.class === klass && !entry.allowed);
@@ -682,7 +678,7 @@ function analyze(report) {
   if (!baseline?.document) return dedupeIssues(issues);
   const initial = baseline.document;
   const robots = `${first(initial.meta.robots)} ${baseline.responseHeaders['x-robots-tag'] || ''}`.toLowerCase();
-  if (robots.includes('noindex')) add('BLOCKER', 'noindex', 'The initial response blocks indexing.', robots.trim());
+  if (robots.includes('noindex') || /(^|[,\s])none([,\s]|$)/.test(robots)) add('BLOCKER', 'noindex', 'The initial response blocks indexing.', robots.trim());
 
   // Snippet controls govern both classic previews and Google AI features
   // (AI Overviews / AI Mode): restricting them silently removes the page from
@@ -722,6 +718,13 @@ function analyze(report) {
   if (!initial.title) add('BLOCKER', 'missing-title', 'The initial HTML has no title.');
   if (!first(initial.meta.description)) add('HIGH', 'missing-description', 'The initial HTML has no meta description.');
   if (initial.canonical.length !== 1) add('BLOCKER', 'canonical-count', `Expected one canonical, found ${initial.canonical.length}.`, initial.canonical);
+  if (initial.canonical.length === 1 && !sameUrl(initial.canonical[0], report.expectedCanonical, baseline.finalUrl)) {
+    add('BLOCKER', 'canonical-mismatch', 'The canonical does not match the expected final page URL.', {
+      canonical: initial.canonical[0],
+      expectedCanonical: report.expectedCanonical,
+      finalUrl: baseline.finalUrl,
+    });
+  }
   if (initial.h1.length === 0) add('HIGH', 'missing-h1', 'The initial HTML has no H1.');
   if (initial.h1.length > 1) add('MEDIUM', 'multiple-h1', `The initial HTML has ${initial.h1.length} H1 elements.`, initial.h1);
   if (initial.wordCount < 80) add('MEDIUM', 'thin-initial-html', `The no-JavaScript main content contains only ${initial.wordCount} words. This is a diagnostic heuristic, not a ranking threshold.`);
@@ -729,9 +732,22 @@ function analyze(report) {
   if (!initial.lang) add('MEDIUM', 'missing-lang', 'The initial HTML does not declare a document language (html[lang]).');
   if (initial.jsonLd.length === 0) add('MEDIUM', 'missing-json-ld', 'The initial HTML contains no JSON-LD structured data.');
   if (initial.jsonLd.some((block) => !block.valid)) add('HIGH', 'invalid-json-ld', 'At least one initial JSON-LD block is invalid.', initial.jsonLd.filter((block) => !block.valid));
+  if (initial.canonical.length === 1) {
+    for (const finding of auditStructuredData(initial.jsonLd, {
+      canonical: initial.canonical[0],
+      finalUrl: baseline.finalUrl,
+      visibleText: initial.visibleText,
+    })) add(finding.severity, finding.code, finding.message, finding.evidence);
+  }
 
   for (const tag of ['og:title', 'og:description', 'og:url', 'og:image', 'twitter:card', 'twitter:title', 'twitter:description', 'twitter:image']) {
     if (!first(initial.meta[tag])) add('HIGH', 'missing-social-tag', `The initial HTML is missing ${tag}.`);
+  }
+  if (initial.canonical.length === 1 && first(initial.meta['og:url']) && !sameUrl(first(initial.meta['og:url']), initial.canonical[0], baseline.finalUrl)) {
+    add('HIGH', 'social-url-mismatch', 'Open Graph URL does not match the canonical URL.', {
+      ogUrl: first(initial.meta['og:url']),
+      canonical: initial.canonical[0],
+    });
   }
   const socialImage = report.rendered?.document?.ogImage || initial.ogImage;
   if (socialImage && !socialImage.loaded) add('HIGH', 'og-image-unreachable', 'The Open Graph image did not load.', socialImage);
@@ -744,7 +760,7 @@ function analyze(report) {
 
   if (report.rendered?.document) {
     const rendered = report.rendered.document;
-    if (initial.canonical[0] && rendered.canonical[0] && initial.canonical[0] !== rendered.canonical[0]) {
+    if (initial.canonical[0] && rendered.canonical[0] && !sameUrl(initial.canonical[0], rendered.canonical[0], baseline.finalUrl)) {
       add('BLOCKER', 'canonical-hydration-mismatch', 'Canonical changes after JavaScript rendering.', { initial: initial.canonical, rendered: rendered.canonical });
     }
     if (initial.title && rendered.title && initial.title !== rendered.title) {
@@ -766,7 +782,11 @@ function analyze(report) {
 
   const comparable = report.noJs.filter((entry) => entry.document && entry.status === 200);
   for (const entry of comparable) {
-    if (entry.document.title !== initial.title || entry.document.canonical[0] !== initial.canonical[0]) {
+    const entryCanonical = entry.document.canonical[0];
+    const initialCanonical = initial.canonical[0];
+    const canonicalMatches = (!entryCanonical && !initialCanonical)
+      || (entryCanonical && initialCanonical && sameUrl(entryCanonical, initialCanonical, baseline.finalUrl));
+    if (entry.document.title !== initial.title || !canonicalMatches) {
       add('BLOCKER', 'crawler-divergence', `${entry.userAgent} receives different title or canonical metadata.`, {
         title: entry.document.title,
         canonical: entry.document.canonical,
@@ -808,8 +828,28 @@ function dedupeIssues(issues) {
 
 function outcomeFor(issues) {
   if (issues.some((issue) => issue.severity === 'BLOCKER')) return 'FAIL';
-  if (issues.some((issue) => issue.severity === 'HIGH' || issue.severity === 'MEDIUM')) return 'CONDITIONAL PASS';
+  if (issues.some((issue) => issue.severity === 'HIGH')) return 'NEEDS FIXES';
+  if (issues.some((issue) => issue.severity === 'MEDIUM')) return 'CONDITIONAL PASS';
   return 'PASS';
+}
+
+function confidenceFor(report) {
+  const limitations = [
+    'Crawler checks use simulated User-Agent headers from the audit machine; they do not prove requests from verified crawler IP ranges.',
+    'Performance values are a single mobile laboratory observation and do not include CrUX, RUM or INP field data.',
+    'Structured data checks cover syntax and common semantic consistency; use official validators and human review for final eligibility.',
+    'The audit does not prove indexing, ranking, rich results or AI citations.',
+  ];
+  const reasons = [];
+  if (report.noJavaScript?.some((entry) => entry.error || entry.status == null)) reasons.push('One or more simulated crawler requests failed.');
+  if (report.robotsTxt?.error) reasons.push('robots.txt could not be evaluated.');
+  if (!report.rendered?.document) reasons.push('The rendered document could not be collected.');
+  return {
+    level: reasons.length ? 'MEDIUM' : 'HIGH',
+    basis: 'automated-technical-evidence',
+    reasons,
+    limitations,
+  };
 }
 
 function printSummary(report, outputPath, htmlPath, handoffPath) {

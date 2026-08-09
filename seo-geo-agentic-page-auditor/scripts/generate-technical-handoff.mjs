@@ -43,7 +43,9 @@ const COPY = {
     canonical: 'Canônica',
     initialSnapshot: 'Snapshot técnico da página',
     initialHtml: 'HTML inicial',
-    renderedDom: 'DOM renderizado',
+    renderedBeforeScroll: 'DOM renderizado antes da rolagem',
+    renderedAfterScroll: 'DOM renderizado após a rolagem',
+    wordCountContext: 'As contagens representam snapshots diferentes: HTML sem JavaScript, DOM hidratado antes da rolagem e DOM após a rolagem. Diferenças entre elas ajudam a localizar dependência de JavaScript ou interação; não são uma pontuação de qualidade.',
     words: 'palavras',
     h1: 'H1',
     internalLinks: 'links internos',
@@ -76,7 +78,7 @@ const COPY = {
     source: 'Evidence source',
     target: 'Audited target',
     method: 'Method',
-    methodPage: 'Automated comparison of initial no-JavaScript HTML across browser, search-engine and social-crawler identities, followed by a rendered inspection in a real browser.',
+    methodPage: 'Automated comparison of initial no-JavaScript HTML across simulated browser, search-engine and social-crawler User-Agents, followed by a rendered inspection in a real browser.',
     methodSitemap: 'Automated inspection of the initial HTML returned by every URL declared in the sitemap.',
     evidenceRule: 'Evidence rule',
     evidenceRuleText: 'Facts below come from the JSON report. Inferences and recommendations are labeled separately and must not be treated as direct observations.',
@@ -104,7 +106,9 @@ const COPY = {
     canonical: 'Canonical',
     initialSnapshot: 'Technical page snapshot',
     initialHtml: 'Initial HTML',
-    renderedDom: 'Rendered DOM',
+    renderedBeforeScroll: 'Rendered DOM before scrolling',
+    renderedAfterScroll: 'Rendered DOM after scrolling',
+    wordCountContext: 'Counts represent different snapshots: no-JavaScript HTML, hydrated DOM before scrolling and DOM after scrolling. Differences help locate JavaScript or interaction dependencies; they are not a quality score.',
     words: 'words',
     h1: 'H1',
     internalLinks: 'internal links',
@@ -143,7 +147,13 @@ const GUIDANCE = {
     inference: ['A resposta HTTP atual interrompe ou enfraquece a cadeia de descoberta e indexação.', 'The current HTTP response interrupts or weakens the discovery and indexing chain.'],
     recommendation: ['Corrigir a rota, redirecionamento ou camada de entrega para retornar o status intencional; páginas indexáveis devem terminar em 200.', 'Fix the route, redirect or delivery layer to return the intended status; indexable pages must end in 200.'],
     acceptance: ['A URL preferida termina em HTTP 200 sem loop, desafio ou mutação inesperada.', 'The preferred URL ends in HTTP 200 without a loop, challenge or unexpected mutation.'],
-    verification: ['Testar a cadeia com curl e com as identidades de crawler do auditor.', 'Test the chain with curl and the auditor crawler identities.'],
+    verification: ['Testar a cadeia com curl e com os User-Agents simulados pelo auditor.', 'Test the chain with curl and the User-Agents simulated by the auditor.'],
+  },
+  'soft-404': {
+    inference: ['Rotas ausentes parecem compartilhar a resposta HTTP 200 da aplicação, o que dificulta distinguir páginas reais de URLs inexistentes.', 'Missing routes appear to share the application HTTP 200 response, making real pages difficult to distinguish from nonexistent URLs.'],
+    recommendation: ['Configurar a camada responsável pelas rotas ausentes para devolver HTTP 404 real, preservando uma página visual de erro útil. Não redirecionar toda URL desconhecida para a home.', 'Configure the layer responsible for missing routes to return a real HTTP 404 while preserving a useful visual error page. Do not redirect every unknown URL to the home page.'],
+    acceptance: ['Uma URL inexistente retorna HTTP 404; URLs públicas válidas continuam retornando seus status e conteúdos corretos.', 'A nonexistent URL returns HTTP 404; valid public URLs continue returning their correct status and content.'],
+    verification: ['Testar uma rota aleatória inexistente e uma amostra de rotas válidas com navegador, `curl` e crawler sem JavaScript.', 'Test a random nonexistent route and a sample of valid routes with a browser, `curl` and a no-JavaScript crawler.'],
   },
   noindex: {
     inference: ['A própria resposta instrui mecanismos de busca a não indexar a página.', 'The response itself instructs search engines not to index the page.'],
@@ -159,6 +169,25 @@ const GUIDANCE = {
   'canonical-mismatch': canonicalGuidance(),
   'canonical-hydration-mismatch': canonicalGuidance(),
   'redirected-sitemap-url': canonicalGuidance(),
+  'social-url-mismatch': canonicalGuidance(),
+  'robots-disallowed': {
+    inference: ['O robots.txt impede o crawler indicado de acessar a URL, interrompendo a etapa de rastreamento.', 'robots.txt prevents the named crawler from accessing the URL, interrupting the crawling stage.'],
+    recommendation: ['Revisar o grupo e a regra vencedora no robots.txt segundo a correspondência mais específica do RFC 9309.', 'Review the winning robots.txt group and rule using RFC 9309 longest-match behavior.'],
+    acceptance: ['A URL estratégica é permitida para os mecanismos de busca pretendidos e a regra vencedora fica registrada na auditoria.', 'The strategic URL is allowed for intended search engines and the winning rule is recorded in the audit.'],
+    verification: ['Reexecutar a auditoria e confirmar a política no Search Console ou ferramenta oficial equivalente.', 'Rerun the audit and confirm the policy in Search Console or an equivalent official tool.'],
+  },
+  'robots-unavailable': {
+    inference: ['A política de rastreamento não pôde ser confirmada com confiança nesta execução.', 'The crawl policy could not be confirmed reliably in this run.'],
+    recommendation: ['Corrigir a disponibilidade e o status de `/robots.txt` e repetir a auditoria antes de concluir sobre rastreamento.', 'Fix `/robots.txt` availability and status, then rerun the audit before drawing crawlability conclusions.'],
+    acceptance: ['O robots.txt retorna uma resposta estável e a regra aplicável à URL pode ser determinada.', 'robots.txt returns a stable response and the rule applicable to the URL can be determined.'],
+    verification: ['Buscar `/robots.txt` diretamente e repetir a avaliação com os consumidores pretendidos.', 'Fetch `/robots.txt` directly and repeat evaluation for intended consumers.'],
+  },
+  'ai-crawler-disallowed': {
+    inference: ['O crawler de busca por IA indicado não pode rastrear a URL segundo o robots.txt atual.', 'The named AI search crawler cannot crawl the URL under the current robots.txt policy.'],
+    recommendation: ['Confirmar se o bloqueio é uma decisão de governança; alterá-lo somente quando a descoberta por esse consumidor for desejada.', 'Confirm whether the block is a governance decision; change it only when discovery by that consumer is intended.'],
+    acceptance: ['A política para crawlers de IA é deliberada, documentada e coerente com os objetivos do site.', 'The AI crawler policy is deliberate, documented and aligned with site goals.'],
+    verification: ['Comparar a regra específica, o resultado automatizado e a política aprovada pela organização.', 'Compare the specific rule, automated result and organization-approved policy.'],
+  },
   'no-internal-links': {
     inference: ['A página depende de descoberta externa ou JavaScript para distribuir e receber contexto interno.', 'The page depends on external discovery or JavaScript to receive and distribute internal context.'],
     recommendation: ['Adicionar links HTML contextuais e rastreáveis para páginas relacionadas e garantir ao menos um caminho interno até esta URL.', 'Add contextual crawlable HTML links to related pages and ensure at least one internal path reaches this URL.'],
@@ -173,12 +202,12 @@ const GUIDANCE = {
     inference: ['O título não possui uma única fonte de verdade entre servidor e cliente.', 'The title has no single source of truth across server and client.'],
     recommendation: ['Gerar o título correto no HTML inicial e impedir que a hidratação o substitua por outro valor.', 'Generate the correct title in initial HTML and prevent hydration from replacing it with another value.'],
     acceptance: ['Título inicial e renderizado são idênticos e específicos para a rota.', 'Initial and rendered titles are identical and route-specific.'],
-    verification: ['Comparar `view-source` com o DOM após hidratação e repetir para crawlers.', 'Compare view-source with the hydrated DOM and repeat for crawler identities.'],
+    verification: ['Comparar `view-source` com o DOM após hidratação e repetir com os User-Agents simulados.', 'Compare view-source with the hydrated DOM and repeat with the simulated User-Agents.'],
   },
   'crawler-divergence': {
     inference: ['Consumidores diferentes recebem sinais essenciais divergentes.', 'Different consumers receive divergent essential signals.'],
     recommendation: ['Remover regras por user agent e alinhar título, canônica e conteúdo essencial na mesma resposta pública.', 'Remove user-agent-specific rules and align title, canonical and essential content in the same public response.'],
-    acceptance: ['Browser, Googlebot, Bingbot e crawlers sociais recebem sinais equivalentes.', 'Browser, Googlebot, Bingbot and social crawlers receive equivalent signals.'],
+    acceptance: ['Browser e requisições com User-Agents simulados de busca e redes sociais recebem sinais equivalentes.', 'Browser and requests using simulated search and social User-Agents receive equivalent signals.'],
     verification: ['Reexecutar a matriz completa de consumidores.', 'Rerun the full consumer matrix.'],
   },
   'missing-social-tag': socialGuidance(),
@@ -212,7 +241,7 @@ const GUIDANCE = {
   },
   'title-length': polishGuidance('title'),
   'description-length': polishGuidance('description'),
-  'html-over-5mb': performanceGuidance('html'),
+  'html-over-10mb': performanceGuidance('html'),
   'non-html-sitemap-url': {
     inference: ['A URL não entrega HTML e, portanto, regras de título, H1, canônica HTML e Open Graph não se aplicam diretamente.', 'The URL does not return HTML, so HTML title, H1, canonical and Open Graph rules do not directly apply.'],
     recommendation: ['Confirmar se o recurso não HTML deve ser descoberto por busca. Mantê-lo no sitemap apenas quando essa descoberta for intencional.', 'Confirm whether the non-HTML resource should be discoverable in search. Keep it in the sitemap only when that discovery is intentional.'],
@@ -318,14 +347,15 @@ function renderPageHandoff(report, options) {
   const rendered = report.rendered || {};
   const renderedDocument = rendered.document || {};
   const counts = countBySeverity(issues);
+  const outcome = pageOutcome(issues);
   const sections = [
-    header(report.targetUrl, report.generatedAt, report.outcome, options.source, t.methodPage),
+    header(report.targetUrl, report.generatedAt, outcome, options.source, t.methodPage),
     `## ${t.executive}\n\n${summaryLine(issues.length, counts)}\n`,
     `## ${t.facts}\n\n${pageFacts(report, baseline, initial, rendered, renderedDocument)}\n`,
   ];
 
   if (issues.length) {
-    sections.push(`## ${t.implementation}\n\n${renderBatches(issues, (issue) => renderPageIssue(issue))}`);
+    sections.push(`## ${t.implementation}\n\n${renderBatches(issues, (issue) => renderPageIssue(issue, report))}`);
   } else {
     sections.push(`## ${t.implementation}\n\n${t.noFindings}\n`);
   }
@@ -339,12 +369,19 @@ function renderPageHandoff(report, options) {
 function renderSitemapHandoff(report, options) {
   const t = COPY[language];
   const grouped = groupSitemapIssues(report.results || []);
-  const findings = [...grouped.entries()].map(([code, urls]) => ({
+  const pageFindings = [...grouped.entries()].map(([code, urls]) => ({
     code,
     urls,
     severity: sitemapSeverity(code),
     message: sitemapFact(code, urls.length),
-  })).sort(compareSeverity);
+  }));
+  const sitemapFindings = (report.sitemapIssues || []).map((issue) => ({
+    code: issue.code || 'sitemap-unavailable',
+    urls: [report.sitemap || '-'],
+    severity: 'BLOCKER',
+    message: issue.message || sitemapFact(issue.code || 'sitemap-unavailable', 1),
+  }));
+  const findings = [...sitemapFindings, ...pageFindings].sort(compareSeverity);
   const counts = countBySeverity(findings);
   const outcome = sitemapOutcome(findings);
   const target = report.sitemap || '-';
@@ -369,7 +406,7 @@ function renderSitemapHandoff(report, options) {
 
 function header(target, generatedAt, outcome, source, method) {
   const t = COPY[language];
-  return `# ${t.title}\n\n${t.purpose}\n\n- **${t.target}:** ${mdCode(target)}\n- **${t.generated}:** ${formatDate(generatedAt)}\n- **${t.outcome}:** ${mdCode(outcome || '-')}\n- **${t.source}:** ${mdCode(source || 'JSON audit report')}\n- **${t.method}:** ${method}\n- **${t.evidenceRule}:** ${t.evidenceRuleText}\n`;
+  return `# ${t.title}\n\n${t.purpose}\n\n- **${t.target}:** ${mdCode(target)}\n- **${t.generated}:** ${formatDate(generatedAt)}\n- **${t.outcome}:** ${mdCode(outcome || '-')}\n- **${t.source}:** ${mdCode(displayEvidenceSource(source))}\n- **${t.method}:** ${method}\n- **${t.evidenceRule}:** ${t.evidenceRuleText}\n`;
 }
 
 function pageFacts(report, baseline, initial, rendered, renderedDocument) {
@@ -378,15 +415,23 @@ function pageFacts(report, baseline, initial, rendered, renderedDocument) {
   const performance = rendered.performance || {};
   const totals = performance.totals || {};
   const jsonLdCount = (initial.jsonLd || []).length;
+  const beforeScroll = rendered.scrollDiscovery?.before;
+  const afterScroll = rendered.scrollDiscovery?.after;
+  const beforeScrollWords = beforeScroll?.wordCount ?? renderedDocument.wordCount;
+  const afterScrollWords = afterScroll?.wordCount ?? renderedDocument.wordCount;
   return [
     `- **${t.status}:** ${baseline.status ?? '-'}; **${t.finalUrl}:** ${mdCode(baseline.finalUrl || '-')}`,
     `- **${t.titleLabel}:** ${mdCode(initial.title || '-')}`,
     `- **${t.canonical}:** ${mdCode(first(initial.canonical) || '-')}`,
     `- **Meta description:** ${mdCode(first(meta.description) || '-')}`,
     `- **${t.initialHtml}:** ${formatCount(initial.wordCount, language === 'pt-BR' ? 'palavra' : 'word', language === 'pt-BR' ? 'palavras' : 'words')}; ${formatCount(initial.h1?.length, 'H1', 'H1')}; ${formatCount(initial.links?.internal, language === 'pt-BR' ? 'link interno' : 'internal link', language === 'pt-BR' ? 'links internos' : 'internal links')}; ${formatCount(jsonLdCount, language === 'pt-BR' ? 'bloco JSON-LD' : 'JSON-LD block', language === 'pt-BR' ? 'blocos JSON-LD' : 'JSON-LD blocks')}.`,
-    `- **${t.renderedDom}:** ${formatCount(renderedDocument.wordCount, language === 'pt-BR' ? 'palavra' : 'word', language === 'pt-BR' ? 'palavras' : 'words')}; ${formatCount(renderedDocument.h1?.length, 'H1', 'H1')}; ${formatCount(renderedDocument.links?.internal, language === 'pt-BR' ? 'link interno' : 'internal link', language === 'pt-BR' ? 'links internos' : 'internal links')}.${scrollFact(rendered.scrollDiscovery)}`,
+    `- **${t.renderedBeforeScroll}:** ${formatCount(beforeScrollWords, language === 'pt-BR' ? 'palavra' : 'word', language === 'pt-BR' ? 'palavras' : 'words')}; ${formatCount(beforeScroll?.sections, language === 'pt-BR' ? 'seção' : 'section', language === 'pt-BR' ? 'seções' : 'sections')}.`,
+    `- **${t.renderedAfterScroll}:** ${formatCount(afterScrollWords, language === 'pt-BR' ? 'palavra' : 'word', language === 'pt-BR' ? 'palavras' : 'words')}; ${formatCount(afterScroll?.sections, language === 'pt-BR' ? 'seção' : 'section', language === 'pt-BR' ? 'seções' : 'sections')}; ${formatCount(renderedDocument.h1?.length, 'H1', 'H1')}; ${formatCount(renderedDocument.links?.internal, language === 'pt-BR' ? 'link interno' : 'internal link', language === 'pt-BR' ? 'links internos' : 'internal links')}.`,
+    `- **${language === 'pt-BR' ? 'Como interpretar as contagens' : 'How to interpret the counts'}:** ${t.wordCountContext}`,
     `- **${t.resourceBudget}:** ${language === 'pt-BR' ? 'scripts' : 'scripts'} ${formatBytes(totals.script?.transferSize)}; ${language === 'pt-BR' ? 'imagens' : 'images'} ${formatBytes(totals.image?.transferSize)}; ${language === 'pt-BR' ? 'vídeo' : 'video'} ${formatBytes(totals.video?.transferSize)}; CSS ${formatBytes(totals.stylesheet?.transferSize)}.`,
     `- **Lab:** LCP ${formatDuration(performance.vitals?.lcp)}; CLS ${formatDecimal(performance.vitals?.cls)}; ${formatCount(rendered.pageErrors?.length, language === 'pt-BR' ? 'erro de página' : 'page error', language === 'pt-BR' ? 'erros de página' : 'page errors')}; ${formatCount(rendered.consoleErrors?.length, language === 'pt-BR' ? 'erro de console' : 'console error', language === 'pt-BR' ? 'erros de console' : 'console errors')}.`,
+    `- **${language === 'pt-BR' ? 'Escopo da matriz' : 'Matrix scope'}:** ${language === 'pt-BR' ? 'User-Agents simulados a partir da máquina de auditoria; não são requisições originadas em IPs verificados dos crawlers.' : 'Simulated User-Agents from the audit machine; these are not requests from verified crawler IP ranges.'}`,
+    `- **${language === 'pt-BR' ? 'Confiança automatizada' : 'Automated confidence'}:** ${mdCode(report.confidence?.level || 'not-determined')}. ${language === 'pt-BR' ? 'Dados de campo, indexação, posicionamento e citações exigem validação externa.' : 'Field data, indexing, rankings and citations require external validation.'}`,
   ].join('\n');
 }
 
@@ -410,9 +455,9 @@ function renderBatches(items, renderItem) {
   return groups.filter(([, group]) => group.length).map(([title, group]) => `### ${title}\n\n${group.map(renderItem).join('\n\n')}`).join('\n\n');
 }
 
-function renderPageIssue(issue) {
+function renderPageIssue(issue, report) {
   const t = COPY[language];
-  const guidance = guidanceFor(issue.code);
+  const guidance = guidanceFor(issue.code, report);
   const evidence = issue.evidence == null ? '' : `\n\n**${t.evidence}:**\n\n${jsonFence(issue.evidence)}`;
   return `#### [${issue.severity}] ${mdInline(issue.code)}\n\n- **${t.fact}:** ${mdInline(localizedPageFact(issue))}\n- **${t.inference}:** ${select(guidance.inference)}\n- **${t.recommendation}:** ${select(guidance.recommendation)}\n- **${t.acceptance}:** ${select(guidance.acceptance)}\n- **${t.verification}:** ${select(guidance.verification)}${evidence}`;
 }
@@ -447,12 +492,53 @@ function sitemapInventory(results) {
   return `| URL | ${t.status} | ${t.finalUrl} | ${t.findings} |\n|---|---:|---|---|\n${rows.join('\n')}`;
 }
 
-function guidanceFor(code) {
+function guidanceFor(code, report) {
+  if (code === 'missing-json-ld') return schemaGuidance(report);
+  if (code.startsWith('schema-')) return structuredDataGuidance();
   return GUIDANCE[code] || {
     inference: ['O achado pode reduzir a consistência técnica ou a compreensão da página e requer confirmação no código e no ambiente publicado.', 'The finding may reduce technical consistency or page understanding and requires confirmation in code and in the deployed environment.'],
     recommendation: ['Localizar a fonte de verdade responsável pelo valor observado e corrigir o padrão na camada mais próxima da origem.', 'Locate the source of truth responsible for the observed value and fix the pattern at the layer closest to its origin.'],
     acceptance: ['O achado não reaparece na auditoria e não há regressão visual, funcional ou de indexabilidade.', 'The finding no longer appears in the audit and there is no visual, functional or indexability regression.'],
     verification: ['Reexecutar o mesmo teste no build e na produção, registrando antes e depois.', 'Rerun the same test against the build and production, recording before and after.'],
+  };
+}
+
+function structuredDataGuidance() {
+  return {
+    inference: ['O JSON-LD pode ser sintaticamente legível, mas está incompleto ou diverge da URL e do conteúdo visível.', 'JSON-LD may be syntactically readable while remaining incomplete or inconsistent with the page URL and visible content.'],
+    recommendation: ['Corrigir a propriedade indicada, alinhar URLs com a canônica e manter somente dados verdadeiros e visíveis. Confirmar requisitos específicos do tipo na documentação oficial.', 'Fix the named property, align URLs with the canonical and keep only truthful visible data. Confirm type-specific requirements in official documentation.'],
+    acceptance: ['O auditor não encontra divergências comuns e o HTML publicado passa no Schema Markup Validator e, quando aplicável, no Rich Results Test.', 'The auditor finds no common consistency issue and published HTML passes Schema Markup Validator and, where applicable, Rich Results Test.'],
+    verification: ['Comparar cada propriedade material com o conteúdo visível e executar os validadores oficiais após o deploy.', 'Compare each material property with visible content and run official validators after deployment.'],
+  };
+}
+
+function schemaGuidance(report) {
+  const baseline = report?.noJavaScript?.find((entry) => entry.userAgent === 'browser-no-js') || report?.noJavaScript?.[0] || {};
+  const title = baseline.document?.title || '';
+  let pathname = '/';
+  try {
+    pathname = new URL(report?.targetUrl || 'https://example.com/').pathname.toLowerCase();
+  } catch {
+    pathname = '/';
+  }
+  const context = `${pathname} ${title}`.toLowerCase();
+  let recommendation;
+  if (pathname === '/') {
+    recommendation = ['Adicionar no HTML inicial um grafo JSON-LD com `Organization` e `WebSite`, usando URLs e identidade públicas estáveis. Incluir outros tipos somente quando representarem conteúdo visível.', 'Add an initial-HTML JSON-LD graph with `Organization` and `WebSite`, using stable public identity and URLs. Include other types only when they represent visible content.'];
+  } else if (/\/(blog|insights|artigos?|noticias?)\//.test(pathname)) {
+    recommendation = ['Adicionar `Article` ou `BlogPosting` e `BreadcrumbList` no HTML inicial, com autor, publisher, imagem e datas que coincidam com o conteúdo visível. Usar `FAQPage` somente se houver FAQ editorial visível e elegível.', 'Add `Article` or `BlogPosting` plus `BreadcrumbList` to initial HTML, with author, publisher, image and dates matching visible content. Use `FAQPage` only when a visible eligible editorial FAQ exists.'];
+  } else if (/\/(faq|perguntas?)\//.test(pathname)) {
+    recommendation = ['Adicionar `FAQPage` somente quando cada pergunta e resposta estiver visível e tiver uma única resposta editorial, além de `BreadcrumbList` quando a navegação correspondente existir.', 'Add `FAQPage` only when every question and answer is visible and has one editorial answer, plus `BreadcrumbList` when matching navigation exists.'];
+  } else if (/(produto|product|software|plataforma|solu[cç][aã]o|service|servi[cç]o|power)/.test(context)) {
+    recommendation = ['Escolher entre `SoftwareApplication`, `Product` ou `Service` conforme a oferta real e adicionar `BreadcrumbList` quando aplicável. Preço, disponibilidade, avaliações e funcionalidades só devem entrar quando estiverem visíveis e verificáveis.', 'Choose `SoftwareApplication`, `Product` or `Service` according to the real offer and add `BreadcrumbList` when applicable. Price, availability, reviews and features must be included only when visible and verifiable.'];
+  } else {
+    recommendation = ['Adicionar `WebPage` com a entidade principal mais específica e verdadeira para o conteúdo visível; incluir `BreadcrumbList` somente quando corresponder à navegação real.', 'Add `WebPage` with the most specific truthful main entity for the visible content; include `BreadcrumbList` only when it matches real navigation.'];
+  }
+  return {
+    inference: ['Mecanismos e agentes precisam inferir entidades e relações apenas do texto, sem uma declaração estruturada complementar.', 'Search engines and agents must infer entities and relationships from text alone, without a complementary structured declaration.'],
+    recommendation,
+    acceptance: ['O HTML inicial contém JSON-LD válido, com URLs absolutas e propriedades coerentes com a página visível, sem tipos ou dados inventados.', 'Initial HTML contains valid JSON-LD with absolute URLs and properties consistent with the visible page, without invented types or data.'],
+    verification: ['Validar o HTML publicado no Schema Markup Validator e, para recursos compatíveis, no Rich Results Test; comparar cada propriedade material com a página visível.', 'Validate published HTML in Schema Markup Validator and, for supported features, Rich Results Test; compare every material property with the visible page.'],
   };
 }
 
@@ -473,9 +559,16 @@ function localizedPageFact(issue) {
     'missing-h1': 'O HTML inicial não contém H1.',
     'multiple-h1': `O HTML inicial contém ${extractFirstNumber(issue.message)} elementos H1.`,
     'canonical-count': `A auditoria esperava uma canônica e encontrou ${extractFirstNumber(issue.message)}.`,
+    'canonical-mismatch': 'A canônica não corresponde à URL final esperada para a página.',
+    'social-url-mismatch': 'A URL Open Graph não corresponde à canônica.',
+    'robots-disallowed': 'O robots.txt bloqueia a URL para um mecanismo de busca pretendido.',
+    'robots-unavailable': 'A política do robots.txt não pôde ser determinada com confiança.',
+    'ai-crawler-disallowed': 'O robots.txt bloqueia a URL para um crawler de busca por IA.',
     'no-internal-links': 'O HTML inicial não contém links internos rastreáveis.',
     'thin-initial-html': `O conteúdo principal sem JavaScript contém somente ${extractFirstNumber(issue.message)} palavras; essa contagem é uma heurística, não um limite de ranqueamento.`,
     'invalid-json-ld': 'Ao menos um bloco JSON-LD do HTML inicial é inválido.',
+    'missing-json-ld': 'O HTML inicial não contém dados estruturados JSON-LD.',
+    'soft-404': 'Uma URL propositalmente inexistente retornou HTTP 200, indicando que rotas ausentes podem gerar soft 404.',
     'missing-social-tag': `O HTML inicial não contém ${issue.message.match(/missing ([^.]+)/)?.[1] || 'uma tag social esperada'}.`,
     'og-image-unreachable': 'A imagem Open Graph não carregou.',
     'og-image-dimensions': `A imagem Open Graph possui ${issue.message.match(/is ([0-9]+x[0-9]+)/)?.[1] || 'dimensão divergente'} e foge da proporção de aproximadamente 1.91:1 esperada pelas plataformas.`,
@@ -512,6 +605,7 @@ function localizedPageFact(issue) {
     'title-length': `O título possui ${extractFirstNumber(issue.message)} caracteres; é necessário avaliar clareza e truncamento, sem aplicar um limite rígido.`,
     'description-length': `A descrição possui ${extractFirstNumber(issue.message)} caracteres e pode truncar em algumas superfícies.`,
   };
+  if (issue.code.startsWith('schema-')) return `Os dados estruturados apresentam a inconsistência ${mdInline(issue.code)}.`;
   return facts[issue.code] || issue.message;
 }
 
@@ -544,27 +638,29 @@ function externalActions(items) {
   return actions;
 }
 
-function scrollFact(scrollDiscovery) {
-  if (!scrollDiscovery?.after) return '';
-  return language === 'pt-BR'
-    ? ` Após ${number(scrollDiscovery.passes)} passagens de rolagem: ${number(scrollDiscovery.after.wordCount)} palavras e ${number(scrollDiscovery.after.sections)} seções no DOM.`
-    : ` After ${number(scrollDiscovery.passes)} scroll passes: ${number(scrollDiscovery.after.wordCount)} words and ${number(scrollDiscovery.after.sections)} sections in the DOM.`;
-}
-
 function extractFirstNumber(value) {
   return String(value || '').match(/[0-9]+(?:\.[0-9]+)?/)?.[0] || '-';
 }
 
 function sitemapSeverity(code) {
   if (code === 'noindex-in-sitemap' || /^http-(?!200)/.test(code) || /^fetch-error/.test(code)) return 'BLOCKER';
+  if (code.startsWith('schema-')) return 'HIGH';
   if (['redirected-sitemap-url', 'canonical-mismatch', 'missing-title', 'missing-description', 'missing-h1', 'invalid-json-ld'].includes(code) || /^canonical-count-/.test(code)) return 'HIGH';
-  if (['missing-og-image', 'missing-twitter-image', 'multiple-h1', 'html-over-5mb'].includes(code)) return 'MEDIUM';
+  if (['missing-og-image', 'missing-twitter-image', 'multiple-h1', 'html-over-10mb'].includes(code)) return 'MEDIUM';
   return 'LOW';
 }
 
 function sitemapOutcome(findings) {
   if (findings.some((item) => item.severity === 'BLOCKER')) return 'FAIL';
-  if (findings.some((item) => item.severity === 'HIGH' || item.severity === 'MEDIUM')) return 'CONDITIONAL PASS';
+  if (findings.some((item) => item.severity === 'HIGH')) return 'NEEDS FIXES';
+  if (findings.some((item) => item.severity === 'MEDIUM')) return 'CONDITIONAL PASS';
+  return 'PASS';
+}
+
+function pageOutcome(issues) {
+  if (issues.some((item) => item.severity === 'BLOCKER')) return 'FAIL';
+  if (issues.some((item) => item.severity === 'HIGH')) return 'NEEDS FIXES';
+  if (issues.some((item) => item.severity === 'MEDIUM')) return 'CONDITIONAL PASS';
   return 'PASS';
 }
 
@@ -640,6 +736,12 @@ function formatDate(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return mdCode(value || '-');
   return `${new Intl.DateTimeFormat(language, { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }).format(date)} UTC`;
+}
+
+function displayEvidenceSource(source) {
+  const value = String(source || 'JSON audit report');
+  if (/^https?:\/\//i.test(value) || !/[\\/]/.test(value)) return value;
+  return path.basename(value);
 }
 
 function formatBytes(value) {

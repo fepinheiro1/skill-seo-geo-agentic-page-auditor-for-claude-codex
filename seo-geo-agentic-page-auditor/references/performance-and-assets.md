@@ -68,7 +68,7 @@ Animated WebP is usually not a video optimization strategy. For visible motion p
 
 ## Hidden resources
 
-CSS-hidden elements can still trigger image, video, iframe, and script downloads. Check network requests at mobile and desktop viewports. Conditionally mount components when they do not exist in that experience.
+CSS-hidden elements can still trigger image, video, iframe, and script downloads. Check network requests at mobile and desktop viewports. Treat hidden visual media separately from non-visual integration documents, and only report a performance problem when the resource has a measurable cost or blocks the user experience. Conditionally mount visual components when they do not exist in that experience.
 
 ## Practical budgets
 

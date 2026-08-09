@@ -85,7 +85,7 @@ Use field Core Web Vitals for outcome and lab tests for diagnosis.
 
 After release:
 
-1. fetch production with no-JS search and social crawler identities;
+1. fetch production with no-JS simulated search and social User-Agents, labeling the evidence accurately;
 2. confirm status, redirect chain, final URL, and initial HTML;
 3. verify canonical, robots, OG, schema, H1, and body text;
 4. open the OG image directly and in a social debugger;
@@ -99,7 +99,7 @@ Do not mark a production task complete before the deployed response is checked. 
 ## Report template
 
 ```text
-Outcome: PASS | CONDITIONAL PASS | FAIL
+Automated outcome: PASS | CONDITIONAL PASS | NEEDS FIXES | FAIL
 
 Blockers:
 - ...
@@ -124,4 +124,9 @@ Experimental:
 
 Not guaranteed:
 - indexing, ranking, rich results, AI citation, cache refresh timing
+
+Methodology limits:
+- simulated User-Agent responses are not verified crawler-origin traffic
+- lab performance is not field data
+- automated schema checks do not replace official validators or human review
 ```
