@@ -1,6 +1,6 @@
 {
   "name": "seo-geo-agentic-page-auditor",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "private": true,
   "description": "Agentic SEO/GEO auditor for public pages, crawler rendering checks, social cards, bilingual reports, and developer-ready handoffs.",
   "license": "MIT",
@@ -11,9 +11,13 @@
     "og:generate": "node seo-geo-agentic-page-auditor/scripts/generate-og-image.mjs",
     "report:html": "node seo-geo-agentic-page-auditor/scripts/render-html-report.mjs",
     "handoff": "node seo-geo-agentic-page-auditor/scripts/generate-technical-handoff.mjs",
-    "check:syntax": "node --check seo-geo-agentic-page-auditor/scripts/audit-public-page.mjs && node --check seo-geo-agentic-page-auditor/scripts/generate-og-image.mjs && node --check seo-geo-agentic-page-auditor/scripts/generate-technical-handoff.mjs && node --check seo-geo-agentic-page-auditor/scripts/render-html-report.mjs && python3 -m py_compile seo-geo-agentic-page-auditor/scripts/audit-sitemap.py"
+    "check:syntax": "node --check seo-geo-agentic-page-auditor/scripts/audit-public-page.mjs && node --check seo-geo-agentic-page-auditor/scripts/generate-og-image.mjs && node --check seo-geo-agentic-page-auditor/scripts/generate-technical-handoff.mjs && node --check seo-geo-agentic-page-auditor/scripts/render-html-report.mjs && python3 -m py_compile seo-geo-agentic-page-auditor/scripts/audit-sitemap.py",
+    "test:unit": "node --test seo-geo-agentic-page-auditor/tests/unit/*.test.mjs && python3 -m unittest discover -s seo-geo-agentic-page-auditor/tests/python -p 'test_*.py'",
+    "test:integration": "node --test seo-geo-agentic-page-auditor/tests/integration/*.test.mjs",
+    "test": "npm run check:syntax && npm run test:unit && npm run test:integration"
   },
-  "devDependencies": {
-    "playwright": "^1.54.2"
+  "dependencies": {
+    "ipaddr.js": "2.5.0",
+    "playwright": "1.62.1"
   }
 }

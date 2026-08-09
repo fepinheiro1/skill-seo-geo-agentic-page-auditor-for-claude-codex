@@ -5,7 +5,7 @@ description: Audit, repair, and publish public web pages for technical SEO, Java
 
 # SEO GEO Agentic Page Auditor
 
-Treat a public page as a multi-consumer artifact. Verify what a person, a no-JavaScript crawler, a rendering search crawler, a social crawler, and a browser agent each receive. Do not approve a page from source-code inspection alone.
+Treat a public page as a multi-consumer artifact. Compare what a person, a no-JavaScript request using simulated crawler identities, a rendering browser, a social identity, and a browser agent receive. Do not describe simulated User-Agent requests as verified crawler traffic, and do not approve a page from source-code inspection alone.
 
 ## Operating principles
 
@@ -50,7 +50,7 @@ Write concrete success criteria before implementation. For an indexable public p
 
 The Node scripts require the `playwright` package. Run them from a directory whose `node_modules` already provides Playwright, or run `npm install` once inside the skill directory (a `package.json` is included) and `npx playwright install chromium` if no Chromium build is present.
 
-Run the page auditor:
+Run the page auditor when Playwright is available. Public-network destinations are enforced by default. Use `--allow-private-network` only for a controlled localhost test and never for an untrusted URL or inside a sensitive network:
 
 ```bash
 node scripts/audit-public-page.mjs \
@@ -60,7 +60,9 @@ node scripts/audit-public-page.mjs \
   --lang pt-BR
 ```
 
-The audit compares no-JavaScript and rendered output, uses search, AI-search, and social crawler identities, records redirects, checks metadata, schema, hreflang, and snippet controls, probes robots.txt (including an allow/block matrix for AI training, AI-search, and user-triggered crawler classes), llms.txt presence, and soft-404 behavior, measures loaded resources at mobile and desktop viewports, detects meaningful content mounted only after scrolling, and flags crawler divergence. The JSON is the machine-readable evidence source; the self-contained HTML is the responsive, printable stakeholder report. Use production and local URLs when both matter.
+When a canonical URL is intentionally different from the requested URL, pass the expected preferred URL explicitly with `--expected-canonical`. Otherwise the final URL after redirects is treated as the expected canonical.
+
+The audit compares no-JavaScript and rendered output, uses simulated search, AI-search and social User-Agents, records redirects, checks canonical, social metadata, schema, hreflang and snippet controls, and evaluates robots.txt across AI training, AI-search and user-triggered crawler classes. It also probes llms.txt and soft-404 behavior, measures loaded resources at mobile and desktop viewports, detects meaningful content mounted only after scrolling, and flags response divergence. The JSON is the machine-readable evidence source; the self-contained HTML is the responsive, printable stakeholder report. Use production and local URLs when both matter.
 
 For a site-wide initial-HTML pass:
 
@@ -126,7 +128,7 @@ Run the release gates in [verification-and-release-gates.md](references/verifica
 - experimental recommendations;
 - residual risks and what cannot be guaranteed.
 
-Do not declare success because the visual browser looks correct. A page is ready only when its initial HTML, rendered DOM, crawler responses, social image, and build/deploy artifacts agree.
+Do not declare success because the visual browser looks correct. A page passes the automated scope only when its initial HTML, rendered DOM, simulated crawler responses, social image, and build/deploy artifacts agree. Verified crawler access, field performance, indexing, rankings, rich-result eligibility and AI citations require external evidence.
 
 After presenting the diagnosis, ask whether the user wants a complete technical Markdown handoff for the developer or AI responsible for the site. Do not generate it automatically unless the user requested it or passed `--handoff`. Generate it from the same JSON evidence source:
 
@@ -150,7 +152,7 @@ node scripts/render-html-report.mjs \
   --lang pt-BR
 ```
 
-The HTML report supports `pt-BR` and `en`; `pt-BR` is the default. Keep machine-readable issue codes stable in English so reports remain comparable across languages.
+The HTML report supports `pt-BR` and `en`; `pt-BR` is the default. Keep its executive section plain-language and concise. Put machine-readable codes and raw evidence inside collapsed technical details, and reserve the Markdown handoff for full implementation instructions. Keep issue codes stable in English so reports remain comparable across languages.
 
 Lead findings with severity and evidence. For implementation, summarize changed behavior and verification. Use these severity levels:
 

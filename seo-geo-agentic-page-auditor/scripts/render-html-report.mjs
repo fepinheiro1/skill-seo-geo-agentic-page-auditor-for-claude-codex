@@ -22,7 +22,13 @@ const PORTUGUESE = {
   'Sitemap readiness report': 'Relatório de prontidão do sitemap',
   'A crawler-first view of discoverability, initial HTML, metadata, social previews, rendering, performance and agentic accessibility.': 'Uma visão orientada a crawlers sobre descoberta, HTML inicial, metadados, previews sociais, renderização, performance e acessibilidade agêntica.',
   'A site-wide view of indexability, canonical consistency, initial HTML, metadata, structured data and social readiness.': 'Uma visão geral de indexabilidade, consistência canônica, HTML inicial, metadados, dados estruturados e prontidão social.',
-  'Release outcome': 'Resultado para publicação',
+  'Automated audit result': 'Resultado da auditoria automatizada',
+  'What this result means': 'O que este resultado significa',
+  'The result covers the automated technical evidence collected in this run. It does not prove indexing, ranking, verified crawler access, rich results or AI citations.': 'O resultado cobre as evidências técnicas automatizadas coletadas nesta execução. Ele não comprova indexação, posicionamento, acesso por crawlers verificados, rich results ou citações por IA.',
+  'Evidence confidence': 'Confiança nas evidências',
+  'Methodology limits': 'Limites da metodologia',
+  'Technical details': 'Detalhes técnicos',
+  'Issue code': 'Código do achado',
   'Coverage': 'Cobertura',
   'Report sections': 'Seções do relatório',
   'Overview': 'Visão geral',
@@ -61,8 +67,8 @@ const PORTUGUESE = {
   'All': 'Todos',
   'View evidence': 'Ver evidências',
   'CONSUMER MATRIX': 'MATRIZ DE CONSUMIDORES',
-  'What each crawler receives': 'O que cada crawler recebe',
-  'JavaScript is disabled in this matrix so initial HTML and edge behavior remain visible.': 'O JavaScript é desativado nesta matriz para revelar o HTML inicial e o comportamento da camada de entrega.',
+  'Responses to simulated crawler identities': 'Respostas a identidades simuladas de crawlers',
+  'These requests change the User-Agent and disable JavaScript. They do not originate from verified crawler IP ranges.': 'Estas requisições alteram o User-Agent e desativam o JavaScript. Elas não partem de faixas de IP verificadas dos crawlers.',
   'Consumer': 'Consumidor',
   'Status': 'Status',
   'Final URL': 'URL final',
@@ -192,7 +198,8 @@ function renderPageReport(report) {
   const meta = initial.meta || {};
   const performance = rendered.performance || {};
   const totals = performance.totals || {};
-  const statusClass = outcomeClass(report.outcome);
+  const outcome = releaseOutcome(issues);
+  const statusClass = outcomeClass(outcome);
   const nextActions = issues.slice().sort(compareSeverity).slice(0, 8);
   const consumerRows = (report.noJavaScript || []).map((entry) => {
     const crawlerState = entry.error || entry.status !== 200 ? 'fail' : 'pass';
@@ -218,8 +225,8 @@ function renderPageReport(report) {
         <p class="hero-summary">${ui('A crawler-first view of discoverability, initial HTML, metadata, social previews, rendering, performance and agentic accessibility.')}</p>
       </div>
       <div class="score-block ${statusClass}">
-        <span class="score-label">${ui('Release outcome')}</span>
-        <strong>${escapeHtml(localizedOutcome(report.outcome))}</strong>
+        <span class="score-label">${ui('Automated audit result')}</span>
+        <strong>${escapeHtml(localizedOutcome(outcome))}</strong>
         <span>${formatDate(report.generatedAt)}</span>
       </div>
     </div>
@@ -243,13 +250,18 @@ function renderPageReport(report) {
           <div><p class="eyebrow dark">${ui('EXECUTIVE OVERVIEW')}</p><h2>${ui('What needs attention first')}</h2></div>
           <p>${issues.length ? findingsSummary(issues.length) : ui('No findings were recorded by the automated checks.')}</p>
         </div>
+        <aside class="scope-note">
+          <div><p class="kicker">${ui('What this result means')}</p><p>${ui('The result covers the automated technical evidence collected in this run. It does not prove indexing, ranking, verified crawler access, rich results or AI citations.')}</p></div>
+          <span class="confidence-badge">${ui('Evidence confidence')}: ${escapeHtml(localizedConfidence(report.confidence?.level))}</span>
+          <details><summary>${ui('Methodology limits')}</summary><ul>${(report.confidence?.limitations || []).map((item) => `<li>${escapeHtml(localizedLimitation(item))}</li>`).join('')}</ul></details>
+        </aside>
         <div class="metric-grid severity-grid">
           ${SEVERITY_ORDER.map((severity) => metricCard(ui(SEVERITY_LABEL[severity]), counts[severity], severity.toLowerCase(), severity === 'BLOCKER' ? ui('Stops release') : severity === 'HIGH' ? ui('Material risk') : severity === 'MEDIUM' ? ui('Optimization') : ui('Polish'))).join('')}
         </div>
         <div class="overview-grid">
           <article class="surface action-surface">
             <div class="surface-heading"><div><p class="kicker">${ui('PRIORITY QUEUE')}</p><h3>${ui('Recommended next actions')}</h3></div><span class="count-badge">${nextActions.length}</span></div>
-            ${nextActions.length ? `<ol class="action-list">${nextActions.map((issue) => `<li><span class="severity-dot ${escapeHtml(issue.severity.toLowerCase())}"></span><div><strong>${escapeHtml(localizedIssueMessage(issue))}</strong><span>${escapeHtml(issue.code)}</span></div></li>`).join('')}</ol>` : emptyState(ui('No automated action is required.'))}
+            ${nextActions.length ? `<ol class="action-list">${nextActions.map((issue) => `<li><span class="severity-dot ${escapeHtml(issue.severity.toLowerCase())}"></span><div><strong>${escapeHtml(localizedIssueMessage(issue))}</strong><span>${escapeHtml(ui(SEVERITY_LABEL[issue.severity] || issue.severity))}</span></div></li>`).join('')}</ol>` : emptyState(ui('No automated action is required.'))}
           </article>
           <aside class="surface health-surface">
             <div class="surface-heading"><div><p class="kicker">${ui('DELIVERY SNAPSHOT')}</p><h3>${ui('Initial response')}</h3></div></div>
@@ -283,7 +295,7 @@ function renderPageReport(report) {
 
     <section class="section" id="crawlers">
       <div class="shell">
-        <div class="section-heading"><div><p class="eyebrow dark">${ui('CONSUMER MATRIX')}</p><h2>${ui('What each crawler receives')}</h2></div><p>${ui('JavaScript is disabled in this matrix so initial HTML and edge behavior remain visible.')}</p></div>
+        <div class="section-heading"><div><p class="eyebrow dark">${ui('CONSUMER MATRIX')}</p><h2>${ui('Responses to simulated crawler identities')}</h2></div><p>${ui('These requests change the User-Agent and disable JavaScript. They do not originate from verified crawler IP ranges.')}</p></div>
         <div class="table-wrap surface">
           <table>
             <thead><tr><th>${ui('Consumer')}</th><th>${ui('Status')}</th><th>${ui('Final URL')}</th><th>${ui('Title')}</th><th>${ui('Canonical')}</th><th>${ui('Time')}</th></tr></thead>
@@ -353,6 +365,8 @@ function renderPageReport(report) {
 
 function renderSitemapReport(report) {
   const results = Array.isArray(report.results) ? report.results : [];
+  const sitemapIssues = Array.isArray(report.sitemapIssues) ? report.sitemapIssues : [];
+  const sitemapFailed = sitemapIssues.length > 0;
   const issueCounts = report.issueCounts || {};
   const healthyCount = Math.max(0, (report.urlCount || results.length) - (report.failingUrlCount || 0));
   const topIssues = Object.entries(issueCounts).slice(0, 12);
@@ -369,7 +383,7 @@ function renderSitemapReport(report) {
         <p class="target-url">${escapeHtml(report.sitemap || '-')}</p>
         <p class="hero-summary">${ui('A site-wide view of indexability, canonical consistency, initial HTML, metadata, structured data and social readiness.')}</p>
       </div>
-      <div class="score-block ${report.failingUrlCount ? 'conditional' : 'pass'}">
+      <div class="score-block ${sitemapFailed ? 'fail' : report.failingUrlCount ? 'conditional' : 'pass'}">
         <span class="score-label">${ui('Coverage')}</span>
         <strong>${formatNumber(report.urlCount || results.length)} URLs</strong>
         <span>${formatDate(report.generatedAt)}</span>
@@ -390,6 +404,7 @@ function renderSitemapReport(report) {
     <section class="section" id="overview">
       <div class="shell">
         <div class="section-heading"><div><p class="eyebrow dark">${ui('EXECUTIVE OVERVIEW')}</p><h2>${ui('Indexable inventory at a glance')}</h2></div><p>${ui('Every URL was evaluated from its initial HTML response, before client-side rendering.')}</p></div>
+        ${sitemapFailed ? `<aside class="scope-note failure"><div><p class="kicker">${ui('What needs attention first')}</p><p>${escapeHtml(activeLanguage === 'en' ? 'The sitemap could not be audited completely. No coverage conclusion should be drawn from this report.' : 'O sitemap não pôde ser auditado por completo. Este relatório não permite concluir que a cobertura está saudável.')}</p></div><details><summary>${ui('Technical details')}</summary><pre>${escapeHtml(JSON.stringify(sitemapIssues, null, 2))}</pre></details></aside>` : ''}
         <div class="metric-grid severity-grid">
           ${metricCard(ui('Audited URLs'), formatNumber(report.urlCount || results.length), 'neutral', ui('Sitemap inventory'))}
           ${metricCard(ui('Healthy'), formatNumber(healthyCount), 'good', ui('No automated finding'))}
@@ -449,10 +464,10 @@ function renderSitemapReport(report) {
 }
 
 function renderFinding(issue, index) {
-  const evidence = issue.evidence == null ? '' : `<details><summary>${ui('View evidence')}</summary><pre>${escapeHtml(JSON.stringify(issue.evidence, null, 2))}</pre></details>`;
+  const evidence = issue.evidence == null ? '' : `<pre>${escapeHtml(JSON.stringify(issue.evidence, null, 2))}</pre>`;
   return `<article class="finding ${escapeHtml(issue.severity.toLowerCase())}" data-finding-severity="${escapeHtml(issue.severity)}">
     <div class="finding-index">${String(index).padStart(2, '0')}</div>
-    <div class="finding-body"><div class="finding-meta"><span class="severity-label">${escapeHtml(ui(SEVERITY_LABEL[issue.severity] || issue.severity))}</span><code>${escapeHtml(issue.code)}</code></div><h3>${escapeHtml(localizedIssueMessage(issue))}</h3>${evidence}</div>
+    <div class="finding-body"><div class="finding-meta"><span class="severity-label">${escapeHtml(ui(SEVERITY_LABEL[issue.severity] || issue.severity))}</span></div><h3>${escapeHtml(localizedIssueMessage(issue))}</h3><details><summary>${ui('Technical details')}</summary><p><strong>${ui('Issue code')}:</strong> <code>${escapeHtml(issue.code)}</code></p>${evidence}</details></div>
   </article>`;
 }
 
@@ -617,6 +632,13 @@ function styles() {
   .section-heading > p { max-width: 490px; margin: 0; color: var(--muted); }
   .section-heading.inverted > p { color: #aaa4ba; }
   .metric-grid { display: grid; gap: 14px; }
+  .scope-note { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 18px 28px; margin: 0 0 24px; padding: 20px 22px; border: 1px solid #d9d6fe; border-left: 4px solid var(--purple); border-radius: var(--radius); background: #f9f8ff; }
+  .scope-note.failure { border-color: #fecdca; border-left-color: var(--red); background: #fff6f5; }
+  .scope-note p { margin: 0; color: var(--muted); }
+  .scope-note .kicker { margin-bottom: 5px; color: var(--ink); }
+  .scope-note details { grid-column: 1 / -1; margin: 0; }
+  .scope-note ul { margin: 12px 0 0; padding-left: 20px; color: var(--muted); }
+  .confidence-badge { white-space: nowrap; padding: 7px 10px; border-radius: 5px; background: #eee8ff; color: var(--purple); font-size: 11px; font-weight: 900; }
   .severity-grid, .performance-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .metric { position: relative; min-height: 158px; padding: 22px; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); box-shadow: var(--shadow); }
   .metric::after { content: ""; position: absolute; left: 0; bottom: 0; width: 100%; height: 4px; background: #98a2b3; }
@@ -766,6 +788,9 @@ function styles() {
     .print-button { display: none; }
     .section { padding: 62px 0; }
     .section-heading h2 { font-size: 32px; }
+    .scope-note { grid-template-columns: 1fr; }
+    .scope-note details { grid-column: 1; }
+    .confidence-badge { justify-self: start; white-space: normal; }
     .severity-grid, .performance-grid { grid-template-columns: 1fr 1fr; }
     .metric { min-height: 138px; padding: 18px; }
     .metric strong { font-size: 28px; }
@@ -806,12 +831,34 @@ function findingsSummary(count) {
 }
 
 function localizedOutcome(outcome) {
-  if (activeLanguage === 'en') return outcome || 'UNKNOWN';
+  if (activeLanguage === 'en') return {
+    PASS: 'PASS IN AUTOMATED SCOPE',
+    'CONDITIONAL PASS': 'PASS WITH LIMITATIONS',
+    'NEEDS FIXES': 'FIXES REQUIRED',
+    FAIL: 'FAILED AUTOMATED CHECKS',
+  }[outcome] || 'UNKNOWN';
   return {
-    PASS: 'APROVADO',
+    PASS: 'APROVADO NO ESCOPO',
     'CONDITIONAL PASS': 'APROVADO COM RESSALVAS',
+    'NEEDS FIXES': 'CORREÇÕES NECESSÁRIAS',
     FAIL: 'REPROVADO',
   }[outcome] || 'DESCONHECIDO';
+}
+
+function localizedConfidence(level) {
+  if (activeLanguage === 'en') return level || 'UNKNOWN';
+  return { HIGH: 'ALTA', MEDIUM: 'MÉDIA', LOW: 'BAIXA' }[level] || 'NÃO DETERMINADA';
+}
+
+function localizedLimitation(value) {
+  if (activeLanguage === 'en') return value;
+  const translations = {
+    'Crawler checks use simulated User-Agent headers from the audit machine; they do not prove requests from verified crawler IP ranges.': 'Os testes de crawlers usam User-Agents simulados a partir da máquina de auditoria; não comprovam requisições vindas de faixas de IP verificadas.',
+    'Performance values are a single mobile laboratory observation and do not include CrUX, RUM or INP field data.': 'Os valores de performance representam uma observação móvel de laboratório e não incluem dados de campo do CrUX, RUM ou INP.',
+    'Structured data checks cover syntax and common semantic consistency; use official validators and human review for final eligibility.': 'Os dados estruturados passam por verificações sintáticas e semânticas comuns; a elegibilidade final exige validadores oficiais e revisão humana.',
+    'The audit does not prove indexing, ranking, rich results or AI citations.': 'A auditoria não comprova indexação, posicionamento, rich results ou citações por IA.',
+  };
+  return translations[value] || value;
 }
 
 function localizedIssueMessage(issue) {
@@ -838,6 +885,25 @@ function localizedIssueMessage(issue) {
     'main-content-js-dependent': 'A maior parte do conteúdo principal aparece somente depois da renderização JavaScript.',
     'scroll-dependent-content': 'Conteúdo relevante da página só é inserido no DOM depois que o usuário rola a tela.',
     'page-errors': 'A página renderizada produziu erros JavaScript.',
+    'canonical-mismatch': 'A URL principal declarada não corresponde à página auditada.',
+    'social-url-mismatch': 'A URL usada no compartilhamento social não corresponde à URL principal.',
+    'robots-disallowed': 'O robots.txt impede um mecanismo de busca de acessar esta página.',
+    'robots-unavailable': 'Não foi possível avaliar o robots.txt com confiança.',
+    'ai-crawler-disallowed': 'O robots.txt impede um crawler de busca por IA de acessar esta página.',
+    'schema-missing-context': 'Um bloco de dados estruturados não identifica o vocabulário schema.org.',
+    'schema-page-url-mismatch': 'Os dados estruturados apontam para outra página.',
+    'schema-product-missing-name': 'Os dados estruturados do produto não possuem nome.',
+    'schema-product-missing-commercial-data': 'Os dados estruturados do produto estão incompletos para resultados comerciais.',
+    'schema-invalid-price': 'Os dados estruturados possuem um preço inválido.',
+    'schema-invalid-currency': 'Os dados estruturados possuem uma moeda inválida ou ausente.',
+    'schema-content-mismatch': 'Os dados estruturados não correspondem ao conteúdo visível.',
+    'schema-article-missing-headline': 'Os dados estruturados do artigo não possuem título.',
+    'schema-article-missing-author': 'Os dados estruturados do artigo não identificam o autor.',
+    'schema-article-missing-date': 'Os dados estruturados do artigo não informam a data de publicação.',
+    'schema-faq-empty': 'Os dados estruturados de FAQ não possuem perguntas.',
+    'schema-faq-incomplete': 'Uma pergunta dos dados estruturados de FAQ está incompleta.',
+    'schema-breadcrumb-incomplete': 'Os dados estruturados de navegação estão incompletos.',
+    'schema-organization-incomplete': 'Os dados estruturados da organização estão incompletos.',
   };
   if (fixed[issue.code]) return fixed[issue.code];
   if (issue.code === 'crawler-fetch-failed') return message.replace(' could not fetch the page.', ' não conseguiu acessar a página.');
@@ -872,7 +938,8 @@ function localizedIssueMessage(issue) {
 function localizedSitemapIssue(issue) {
   if (activeLanguage === 'en') return humanize(issue);
   const labels = {
-    'html-over-5mb': 'HTML acima de 5 MB',
+    'html-over-10mb': 'HTML acima de 10 MB',
+    'sitemap-unavailable': 'Sitemap indisponível ou inválido',
     'redirected-sitemap-url': 'URL do sitemap redirecionada',
     'noindex-in-sitemap': 'Noindex presente no sitemap',
     'missing-title': 'Título ausente',
@@ -886,6 +953,7 @@ function localizedSitemapIssue(issue) {
     'thin-initial-html-heuristic': 'HTML inicial com pouco conteúdo',
   };
   if (labels[issue]) return labels[issue];
+  if (issue.startsWith('schema-')) return 'Dados estruturados inconsistentes';
   if (issue.startsWith('http-')) return `Resposta HTTP ${issue.slice(5)}`;
   if (issue.startsWith('canonical-count-')) return `${issue.slice(16)} canônicas encontradas`;
   if (issue.startsWith('fetch-error')) return 'Erro ao acessar a URL';
@@ -906,8 +974,15 @@ function localizedResourceType(type) {
 
 function outcomeClass(outcome) {
   if (outcome === 'PASS') return 'pass';
-  if (outcome === 'FAIL') return 'fail';
+  if (outcome === 'FAIL' || outcome === 'NEEDS FIXES') return 'fail';
   return 'conditional';
+}
+
+function releaseOutcome(issues) {
+  if (issues.some((issue) => issue.severity === 'BLOCKER')) return 'FAIL';
+  if (issues.some((issue) => issue.severity === 'HIGH')) return 'NEEDS FIXES';
+  if (issues.some((issue) => issue.severity === 'MEDIUM')) return 'CONDITIONAL PASS';
+  return 'PASS';
 }
 
 function first(value) {
