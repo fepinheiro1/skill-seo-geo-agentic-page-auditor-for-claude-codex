@@ -31,6 +31,8 @@ Do not add every type to every page. Add a main entity and complementary items t
 
 ## Graph design
 
+An object wrapping `@context` and `@graph` does not need its own `@type`; validate the entities inside the graph. See [JSON-LD named graphs](https://www.w3.org/TR/json-ld11/#named-graphs).
+
 Use stable absolute `@id` values and connect entities instead of duplicating conflicting objects. Align:
 
 - page URL and canonical;

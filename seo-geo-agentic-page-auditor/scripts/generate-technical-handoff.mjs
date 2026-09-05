@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { sitemapLevelFindings } from '../lib/report-findings.mjs';
 
 const SEVERITY_ORDER = ['BLOCKER', 'HIGH', 'MEDIUM', 'LOW'];
 
@@ -375,12 +376,7 @@ function renderSitemapHandoff(report, options) {
     severity: sitemapSeverity(code),
     message: sitemapFact(code, urls.length),
   }));
-  const sitemapFindings = (report.sitemapIssues || []).map((issue) => ({
-    code: issue.code || 'sitemap-unavailable',
-    urls: [report.sitemap || '-'],
-    severity: 'BLOCKER',
-    message: issue.message || sitemapFact(issue.code || 'sitemap-unavailable', 1),
-  }));
+  const sitemapFindings = sitemapLevelFindings(report);
   const findings = [...sitemapFindings, ...pageFindings].sort(compareSeverity);
   const counts = countBySeverity(findings);
   const outcome = sitemapOutcome(findings);
@@ -432,6 +428,7 @@ function pageFacts(report, baseline, initial, rendered, renderedDocument) {
     `- **Lab:** LCP ${formatDuration(performance.vitals?.lcp)}; CLS ${formatDecimal(performance.vitals?.cls)}; ${formatCount(rendered.pageErrors?.length, language === 'pt-BR' ? 'erro de página' : 'page error', language === 'pt-BR' ? 'erros de página' : 'page errors')}; ${formatCount(rendered.consoleErrors?.length, language === 'pt-BR' ? 'erro de console' : 'console error', language === 'pt-BR' ? 'erros de console' : 'console errors')}.`,
     `- **${language === 'pt-BR' ? 'Escopo da matriz' : 'Matrix scope'}:** ${language === 'pt-BR' ? 'User-Agents simulados a partir da máquina de auditoria; não são requisições originadas em IPs verificados dos crawlers.' : 'Simulated User-Agents from the audit machine; these are not requests from verified crawler IP ranges.'}`,
     `- **${language === 'pt-BR' ? 'Confiança automatizada' : 'Automated confidence'}:** ${mdCode(report.confidence?.level || 'not-determined')}. ${language === 'pt-BR' ? 'Dados de campo, indexação, posicionamento e citações exigem validação externa.' : 'Field data, indexing, rankings and citations require external validation.'}`,
+    ...(report.checks?.length ? [jsonFence({ checks: report.checks })] : []),
   ].join('\n');
 }
 
@@ -493,6 +490,12 @@ function sitemapInventory(results) {
 }
 
 function guidanceFor(code, report) {
+  if (code === 'lastmod-uniform') return {
+    inference: ['Datas idênticas podem indicar atualização automática no build; mudanças simultâneas legítimas também são possíveis.', 'Identical dates may indicate build stamping; legitimate simultaneous updates are also possible.'],
+    recommendation: ['Comparar as datas com o histórico real de edição. Corrigir a origem de lastmod apenas se os valores não refletirem mudanças relevantes.', 'Compare dates with actual edit history. Fix the lastmod source only if values do not reflect meaningful changes.'],
+    acceptance: ['Cada lastmod tem suporte no histórico de conteúdo; datas iguais justificadas são registradas como intencionais.', 'Each lastmod is supported by content history; justified identical dates are documented as intentional.'],
+    verification: ['Comparar dois builds sem alterações de conteúdo e confirmar que lastmod permanece estável.', 'Compare two builds without content changes and confirm lastmod remains stable.'],
+  };
   if (code === 'missing-json-ld') return schemaGuidance(report);
   if (code.startsWith('schema-')) return structuredDataGuidance();
   return GUIDANCE[code] || {
@@ -576,10 +579,10 @@ function localizedPageFact(issue) {
     'missing-json-ld': 'O HTML inicial não contém dados estruturados JSON-LD.',
     'soft-404': 'Uma URL propositalmente inexistente retornou HTTP 200, indicando soft 404 para rotas ausentes.',
     'robots-disallow-all': 'O robots.txt bloqueia o site inteiro para todos os crawlers.',
-    'robots-txt-unavailable': 'O robots.txt não retornou 200; crawlers assumem permissão total, mas a descoberta de sitemap via robots.txt fica indisponível.',
+    'robots-txt-unavailable': 'O robots.txt retornou erro 4xx diferente de 429. O Google trata isso como ausência de regras; a descoberta de sitemap por esse arquivo fica indisponível.',
     'sitemap-not-in-robots': 'O robots.txt não declara uma linha Sitemap:.',
     'search-crawler-blocked-robots': `O robots.txt bloqueia crawlers de busca (${issue.message.match(/blocks (.+) from crawling/)?.[1] || 'ao menos um'}) de rastrear esta página.`,
-    'ai-search-crawler-blocked': `O robots.txt bloqueia crawlers de busca de IA (${issue.message.match(/\(([^)]+)\)/)?.[1] || 'ao menos um'}); a página não pode ser citada por esses mecanismos de resposta de IA.`,
+    'ai-search-crawler-blocked': `O robots.txt bloqueia crawlers de busca de IA (${issue.message.match(/\(([^)]+)\)/)?.[1] || 'ao menos um'}); isso limita o rastreamento para busca de IA e pode reduzir a descoberta ou as citações.`,
     'user-fetcher-blocked': `O robots.txt bloqueia fetchers de IA acionados por usuários (${issue.message.match(/\(([^)]+)\)/)?.[1] || 'ao menos um'}); aberturas ao vivo por assistentes podem falhar.`,
     'snippet-restricted': 'Controles de snippet (nosnippet ou max-snippet:0) removem a página das prévias de busca e das respostas de IA do Google.',
     'snippet-limited': `O max-snippet limita as prévias a ${extractFirstNumber(issue.message)} caracteres, o que também restringe respostas de IA.`,

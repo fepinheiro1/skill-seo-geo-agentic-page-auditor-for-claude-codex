@@ -42,3 +42,14 @@ test('accepts a consistent visible Product node', () => {
   });
   assert.deepEqual(findings, []);
 });
+
+test('accepts an untyped graph container and still validates its entities', () => {
+  const context = { canonical: 'https://example.com/page', finalUrl: 'https://example.com/page', visibleText: 'Example' };
+  const value = {
+    '@context': 'https://schema.org',
+    '@graph': [{ '@type': 'WebPage', url: context.canonical }],
+  };
+  assert.deepEqual(auditStructuredData([{ valid: true, index: 0, value }], context), []);
+  value['@graph'].push({ name: 'Example' });
+  assert.ok(auditStructuredData([{ valid: true, index: 0, value }], context).some((finding) => finding.code === 'schema-missing-type'));
+});

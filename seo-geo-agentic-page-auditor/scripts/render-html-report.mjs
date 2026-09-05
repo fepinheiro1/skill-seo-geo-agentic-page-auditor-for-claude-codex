@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { sitemapLevelFindings } from '../lib/report-findings.mjs';
 
 const SEVERITY_ORDER = ['BLOCKER', 'HIGH', 'MEDIUM', 'LOW'];
 const SEVERITY_LABEL = {
@@ -26,6 +27,7 @@ const PORTUGUESE = {
   'What this result means': 'O que este resultado significa',
   'The result covers the automated technical evidence collected in this run. It does not prove indexing, ranking, verified crawler access, rich results or AI citations.': 'O resultado cobre as evidências técnicas automatizadas coletadas nesta execução. Ele não comprova indexação, posicionamento, acesso por crawlers verificados, rich results ou citações por IA.',
   'Evidence confidence': 'Confiança nas evidências',
+  'No page-level finding': 'Sem achados por URL',
   'Methodology limits': 'Limites da metodologia',
   'Technical details': 'Detalhes técnicos',
   'Issue code': 'Código do achado',
@@ -253,7 +255,7 @@ function renderPageReport(report) {
         <aside class="scope-note">
           <div><p class="kicker">${ui('What this result means')}</p><p>${ui('The result covers the automated technical evidence collected in this run. It does not prove indexing, ranking, verified crawler access, rich results or AI citations.')}</p></div>
           <span class="confidence-badge">${ui('Evidence confidence')}: ${escapeHtml(localizedConfidence(report.confidence?.level))}</span>
-          <details><summary>${ui('Methodology limits')}</summary><ul>${(report.confidence?.limitations || []).map((item) => `<li>${escapeHtml(localizedLimitation(item))}</li>`).join('')}</ul></details>
+          <details><summary>${ui('Methodology limits')}</summary><ul>${(report.confidence?.limitations || []).map((item) => `<li>${escapeHtml(localizedLimitation(item))}</li>`).join('')}</ul>${renderCheckCoverage(report.checks)}</details>
         </aside>
         <div class="metric-grid severity-grid">
           ${SEVERITY_ORDER.map((severity) => metricCard(ui(SEVERITY_LABEL[severity]), counts[severity], severity.toLowerCase(), severity === 'BLOCKER' ? ui('Stops release') : severity === 'HIGH' ? ui('Material risk') : severity === 'MEDIUM' ? ui('Optimization') : ui('Polish'))).join('')}
@@ -367,7 +369,9 @@ function renderSitemapReport(report) {
   const results = Array.isArray(report.results) ? report.results : [];
   const sitemapIssues = Array.isArray(report.sitemapIssues) ? report.sitemapIssues : [];
   const sitemapFailed = sitemapIssues.length > 0;
-  const issueCounts = report.issueCounts || {};
+  const levelFindings = sitemapLevelFindings(report);
+  const issueCounts = { ...report.issueCounts };
+  for (const finding of levelFindings) issueCounts[finding.code] ||= 1;
   const healthyCount = Math.max(0, (report.urlCount || results.length) - (report.failingUrlCount || 0));
   const topIssues = Object.entries(issueCounts).slice(0, 12);
   const duplicateTitleUrls = Object.values(report.duplicateTitles || {}).flat().length;
@@ -383,7 +387,7 @@ function renderSitemapReport(report) {
         <p class="target-url">${escapeHtml(report.sitemap || '-')}</p>
         <p class="hero-summary">${ui('A site-wide view of indexability, canonical consistency, initial HTML, metadata, structured data and social readiness.')}</p>
       </div>
-      <div class="score-block ${sitemapFailed ? 'fail' : report.failingUrlCount ? 'conditional' : 'pass'}">
+      <div class="score-block ${sitemapFailed || levelFindings.some((issue) => ['BLOCKER', 'HIGH'].includes(issue.severity)) ? 'fail' : report.failingUrlCount || levelFindings.length ? 'conditional' : 'pass'}">
         <span class="score-label">${ui('Coverage')}</span>
         <strong>${formatNumber(report.urlCount || results.length)} URLs</strong>
         <span>${formatDate(report.generatedAt)}</span>
@@ -405,9 +409,10 @@ function renderSitemapReport(report) {
       <div class="shell">
         <div class="section-heading"><div><p class="eyebrow dark">${ui('EXECUTIVE OVERVIEW')}</p><h2>${ui('Indexable inventory at a glance')}</h2></div><p>${ui('Every URL was evaluated from its initial HTML response, before client-side rendering.')}</p></div>
         ${sitemapFailed ? `<aside class="scope-note failure"><div><p class="kicker">${ui('What needs attention first')}</p><p>${escapeHtml(activeLanguage === 'en' ? 'The sitemap could not be audited completely. No coverage conclusion should be drawn from this report.' : 'O sitemap não pôde ser auditado por completo. Este relatório não permite concluir que a cobertura está saudável.')}</p></div><details><summary>${ui('Technical details')}</summary><pre>${escapeHtml(JSON.stringify(sitemapIssues, null, 2))}</pre></details></aside>` : ''}
+        <div class="finding-list sitemap-findings">${levelFindings.map((issue, index) => renderFinding(issue, index + 1)).join('')}</div>
         <div class="metric-grid severity-grid">
           ${metricCard(ui('Audited URLs'), formatNumber(report.urlCount || results.length), 'neutral', ui('Sitemap inventory'))}
-          ${metricCard(ui('Healthy'), formatNumber(healthyCount), 'good', ui('No automated finding'))}
+          ${metricCard(ui('Healthy'), formatNumber(healthyCount), 'good', ui('No page-level finding'))}
           ${metricCard(ui('With findings'), formatNumber(report.failingUrlCount || 0), report.failingUrlCount ? 'medium' : 'good', ui('Needs review'))}
           ${metricCard(ui('Issue types'), formatNumber(Object.keys(issueCounts).length), Object.keys(issueCounts).length ? 'low' : 'good', ui('Distinct patterns'))}
         </div>
@@ -677,6 +682,7 @@ function styles() {
   .filter-button.active { border-color: var(--purple); background: var(--purple); color: white; }
   .filter-button.active span { color: #ddd0ff; }
   .finding-list { display: grid; gap: 10px; }
+  .sitemap-findings:not(:empty) { margin-bottom: 18px; }
   .finding { display: grid; grid-template-columns: 66px minmax(0, 1fr); border: 1px solid var(--line); border-left: 4px solid #98a2b3; border-radius: var(--radius); background: white; }
   .finding.blocker { border-left-color: var(--red); }
   .finding.high { border-left-color: #f04438; }
@@ -845,6 +851,14 @@ function localizedOutcome(outcome) {
   }[outcome] || 'DESCONHECIDO';
 }
 
+function renderCheckCoverage(checks) {
+  if (!checks?.length) return '';
+  const labels = activeLanguage === 'en'
+    ? { verified: 'Verified', 'not-verified': 'Not verified', 'not-applicable': 'Not applicable' }
+    : { verified: 'Verificado', 'not-verified': 'Não verificado', 'not-applicable': 'Não aplicável' };
+  return `<ul>${checks.map((check) => `<li><code>${escapeHtml(check.id)}</code>: ${escapeHtml(labels[check.status] || check.status)}</li>`).join('')}</ul>`;
+}
+
 function localizedConfidence(level) {
   if (activeLanguage === 'en') return level || 'UNKNOWN';
   return { HIGH: 'ALTA', MEDIUM: 'MÉDIA', LOW: 'BAIXA' }[level] || 'NÃO DETERMINADA';
@@ -888,7 +902,10 @@ function localizedIssueMessage(issue) {
     'canonical-mismatch': 'A URL principal declarada não corresponde à página auditada.',
     'social-url-mismatch': 'A URL usada no compartilhamento social não corresponde à URL principal.',
     'robots-disallowed': 'O robots.txt impede um mecanismo de busca de acessar esta página.',
-    'robots-unavailable': 'Não foi possível avaliar o robots.txt com confiança.',
+    'robots-unavailable': 'Não foi possível avaliar o robots.txt; o Google pode suspender o rastreamento ou reutilizar regras em cache.',
+    'rendered-fetch-failed': 'Não foi possível verificar a renderização móvel da página.',
+    'desktop-fetch-failed': 'Não foi possível concluir a verificação de recursos no desktop.',
+    'lastmod-uniform': 'A maioria das datas de modificação é idêntica; verifique se refletem mudanças reais no conteúdo.',
     'ai-crawler-disallowed': 'O robots.txt impede um crawler de busca por IA de acessar esta página.',
     'schema-missing-context': 'Um bloco de dados estruturados não identifica o vocabulário schema.org.',
     'schema-page-url-mismatch': 'Os dados estruturados apontam para outra página.',
@@ -913,9 +930,9 @@ function localizedIssueMessage(issue) {
   if (issue.code === 'thin-initial-html') return message.replace('The no-JavaScript main content contains only ', 'O conteúdo principal sem JavaScript possui apenas ').replace(' words. This is a diagnostic heuristic, not a ranking threshold.', ' palavras. Esta é uma heurística de diagnóstico, não um limite de ranqueamento.');
   if (issue.code === 'missing-social-tag') return message.replace('The initial HTML is missing ', 'O HTML inicial não possui ');
   if (issue.code === 'og-image-dimensions') return message.replace('The Open Graph image is ', 'A imagem Open Graph possui ').replace('most platforms expect roughly 1.91:1 at 1200x630 or larger, so review cropping in previews.', 'a maioria das plataformas espera cerca de 1.91:1 em 1200x630 ou maior; revise o corte nas prévias.');
-  if (issue.code === 'robots-txt-unavailable') return message.replace('robots.txt did not return 200 (got ', 'O robots.txt não retornou 200 (obteve ').replace('). Crawlers assume allow-all, but sitemap discovery through robots.txt is unavailable.', '). Crawlers assumem permissão total, mas a descoberta de sitemap via robots.txt fica indisponível.');
+  if (issue.code === 'robots-txt-unavailable') return 'O robots.txt retornou um erro 4xx diferente de 429. O Google trata isso como ausência de regras; a descoberta de sitemap por esse arquivo fica indisponível.';
   if (issue.code === 'search-crawler-blocked-robots') return message.replace('robots.txt blocks ', 'O robots.txt bloqueia ').replace(' from crawling this page.', ' de rastrear esta página.');
-  if (issue.code === 'ai-search-crawler-blocked') return message.replace('robots.txt blocks AI search crawlers (', 'O robots.txt bloqueia crawlers de busca de IA (').replace('); the page cannot be cited by those AI answer engines.', '); a página não pode ser citada por esses mecanismos de resposta de IA.');
+  if (issue.code === 'ai-search-crawler-blocked') return message.replace('robots.txt blocks AI search crawlers (', 'O robots.txt bloqueia crawlers de busca de IA (').replace('); this limits crawling for AI search and may reduce discovery or citations.', '); isso limita o rastreamento para busca de IA e pode reduzir a descoberta ou as citações.');
   if (issue.code === 'user-fetcher-blocked') return message.replace('robots.txt blocks user-triggered AI fetchers (', 'O robots.txt bloqueia fetchers de IA acionados por usuários (').replace('); live page opens from AI assistants may fail, and these fetchers may not honor robots.txt.', '); aberturas da página ao vivo por assistentes de IA podem falhar, e esses fetchers podem não respeitar o robots.txt.');
   if (issue.code === 'snippet-limited') return message.replace('max-snippet limits previews to ', 'O max-snippet limita as prévias a ').replace(' characters; confirm this restriction is intentional, because it also constrains AI answers.', ' caracteres; confirme se a restrição é intencional, pois ela também limita as respostas de IA.');
   if (issue.code === 'data-nosnippet-present') return message.replace(' elements use data-nosnippet; their text is excluded from previews and AI answers. Confirm the exclusion is intentional.', ' elementos usam data-nosnippet; o texto deles fica fora das prévias e das respostas de IA. Confirme se a exclusão é intencional.');

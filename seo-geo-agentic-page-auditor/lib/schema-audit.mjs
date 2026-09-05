@@ -39,7 +39,10 @@ export function auditStructuredData(blocks, context) {
   for (const node of nodes) {
     const types = valuesForType(node);
     const primaryType = types[0] || 'Unknown';
-    if (!types.length) add('MEDIUM', 'schema-missing-type', 'A structured data node has no @type.', { id: node['@id'] || null });
+    // A JSON-LD graph envelope may contain only @context, @id and @graph.
+    // Validate the entities inside it without requiring a type on the envelope.
+    const graphContainer = Array.isArray(node['@graph']) && Object.keys(node).every((key) => ['@context', '@id', '@graph'].includes(key));
+    if (!types.length && !graphContainer) add('MEDIUM', 'schema-missing-type', 'A structured data node has no @type.', { id: node['@id'] || null });
 
     if (types.some((type) => ['WebPage', 'Article', 'BlogPosting', 'NewsArticle', 'Product'].includes(type))) {
       const reference = pageReference(node);

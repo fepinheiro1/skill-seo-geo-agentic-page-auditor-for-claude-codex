@@ -29,13 +29,16 @@ Browser agents often use the accessibility tree as their machine view. Accessibi
 
 Audit robots.txt and infrastructure separately. A permitted crawler can still be blocked by WAF, CDN bot protection, JavaScript challenges, CAPTCHA, authentication, geo rules, or rate limiting.
 
-Reason about crawlers in three classes, because blocking each class has opposite consequences:
+Reason about provider-specific purposes rather than assuming every crawler belongs to one exclusive class:
 
-| Class | Examples | Blocking means |
+| Purpose | Examples | Effect of blocking |
 |---|---|---|
-| AI training | GPTBot, ClaudeBot, Google-Extended, Applebot-Extended, Meta-ExternalAgent, CCBot, Amazonbot | a legitimate content policy; citations in AI search are unaffected |
-| AI search index | OAI-SearchBot, Claude-SearchBot, PerplexityBot | the site disappears from those AI answer engines |
-| User-triggered fetchers | ChatGPT-User, Claude-User, Perplexity-User | live page opens from assistants fail; these fetchers may not honor robots.txt because a person initiated the request |
+| Training / dataset controls | GPTBot, ClaudeBot, Applebot-Extended, Meta-ExternalAgent, CCBot | Applies the provider's declared content-use policy; verify the current scope rather than assuming a universal citation effect |
+| Training and grounding | Google-Extended | Controls both future Gemini training and grounding in Gemini Apps / Vertex AI; does not control Google Search inclusion or ranking |
+| AI search | OAI-SearchBot, Claude-SearchBot, PerplexityBot | Restricts crawling used for AI search; discovery or citations may decline, but absence from all answers is not proven |
+| User-triggered fetching | ChatGPT-User, Claude-User, Perplexity-User | May affect live fetches; support for robots.txt depends on the provider |
+
+Google-Extended is a robots product token, not a distinct HTTP User-Agent. Source: [Google's crawler documentation](https://developers.google.com/crawling/docs/crawlers-fetchers/google-common-crawlers#google-extended), checked 2026-09-05. The report exposes it as `training-and-grounding`. The broader roster also includes Amazonbot; consult each provider before changing its rules.
 
 The classic mistake is blocking an AI-search crawler while intending to block only training. `audit-public-page.mjs` records an allow/block matrix for this roster (`origin.aiCrawlerPolicy`) and raises `ai-search-crawler-blocked` when a citation-critical crawler is disallowed.
 
@@ -43,7 +46,9 @@ Test fetches with at least Googlebot Smartphone, Bingbot, OAI-SearchBot, Claude-
 
 ## llms.txt
 
-`/llms.txt` is a proposal, not a universal search or ranking standard. The evidence as of 2026-08 is unambiguous: adoption sits around 10% of measured domains, crawl-log studies show AI crawlers request the file in roughly 0.1% of their visits, statistical models find no citation effect, Google documented in June 2026 that Search ignores the file entirely, and no major AI provider has committed to reading it in production. Recommend it only as a low-cost curated navigation aid for sites with high-value documentation, state this evidence when the user asks for it, and never present it as a visibility requirement.
+`/llms.txt` is a [proposal for curated LLM-readable navigation](https://llmstxt.org/), not a universal search or ranking standard. Recommend it only when the site has useful public documentation and maintenance cost is justified. Do not infer crawler adoption, citation impact, or provider support from the file's existence.
+
+For quantitative claims, cite the original study next to the claim and include its date, sample and measurement method. Recheck current provider documentation before stating that a product uses or ignores the file. Omit unsupported adoption or citation statistics.
 
 If present:
 

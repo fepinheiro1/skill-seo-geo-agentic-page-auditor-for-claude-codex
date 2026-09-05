@@ -10,7 +10,7 @@ Methodology maintained by Performa.AI.
 
 - Initial HTML versus rendered DOM, especially for React and SPA pages, including content mounted only after scrolling.
 - Responses to simulated browser, Googlebot Smartphone, Bingbot, OAI-SearchBot, Claude-SearchBot, PerplexityBot, Facebook, X, and LinkedIn User-Agents.
-- AI crawler policy: an allow/block matrix over robots.txt for three crawler classes — AI training (GPTBot, ClaudeBot, Google-Extended, Applebot-Extended, Meta-ExternalAgent, CCBot, Amazonbot), AI search (OAI-SearchBot, Claude-SearchBot, PerplexityBot), and user-triggered fetchers (ChatGPT-User, Claude-User, Perplexity-User) — flagging the classic mistake of blocking citation-critical crawlers while intending to block only training.
+- AI crawler policy: an allow/block matrix over robots.txt for provider-specific purposes — training/dataset controls (GPTBot, ClaudeBot, Applebot-Extended, Meta-ExternalAgent, CCBot, Amazonbot), training and grounding (Google-Extended), AI search (OAI-SearchBot, Claude-SearchBot, PerplexityBot), and user-triggered fetchers (ChatGPT-User, Claude-User, Perplexity-User) — flagging the classic mistake of blocking citation-critical crawlers while intending to block only training.
 - Indexing fundamentals: status codes, redirects, canonical, robots, title, description, H1, document language, crawlable body content, sitemap posture, soft-404 behavior, and noindex risk.
 - Snippet controls: `nosnippet`, `max-snippet`, and `data-nosnippet`, which govern both classic previews and Google AI answers.
 - Internationalization: hreflang code validity, absolute URLs, and self-reference.
@@ -90,7 +90,7 @@ The skill can produce three outputs:
 - A self-contained HTML report, suitable for stakeholders and print/PDF.
 - A technical Markdown handoff, suitable for a developer or another AI agent.
 
-Handoffs redact absolute local paths, distinguish no-JavaScript, hydrated, and post-scroll snapshots, and provide issue-specific recommendations with acceptance criteria and verification steps. Release outcomes use `NEEDS FIXES` whenever a high-priority finding remains.
+Handoffs redact absolute local paths, distinguish no-JavaScript, hydrated, and post-scroll snapshots, and provide issue-specific recommendations with acceptance criteria and verification steps. Release outcomes use `NEEDS FIXES` whenever a high-priority finding remains. Site-wide sitemap findings, including uniform `lastmod` warnings, are preserved in both HTML and Markdown. Page reports include per-check coverage (`verified`, `not-verified`, `not-applicable`); collected evidence and passing results are distinct.
 
 Reports support `pt-BR` and `en`. Machine-readable issue codes stay in English so results remain comparable across languages.
 

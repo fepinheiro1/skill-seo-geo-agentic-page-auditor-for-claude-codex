@@ -1,11 +1,19 @@
 ---
 name: seo-geo-agentic-page-auditor
-description: Audit, repair, and publish public web pages for technical SEO, JavaScript rendering, crawlability, indexing, GEO and AI citations, Open Graph and social previews, structured data, Core Web Vitals, accessibility-tree quality, and experimental agentic-web readiness. Use for React or other JavaScript sites, SEO regressions, pages missing from search, generic social cards, FAQ and schema work, crawler/HTML mismatches, sitemap or canonical problems, excessive image/video/script loading, and pre-publish quality gates.
+description: Audit public pages for technical SEO, JavaScript rendering, crawler access, GEO, social previews, structured data, performance, and agentic readiness. Use for page diagnostics, SEO regressions, and release checks; repair or publish only within the requested scope.
 ---
 
 # SEO GEO Agentic Page Auditor
 
 Treat a public page as a multi-consumer artifact. Compare what a person, a no-JavaScript request using simulated crawler identities, a rendering browser, a social identity, and a browser agent receive. Do not describe simulated User-Agent requests as verified crawler traffic, and do not approve a page from source-code inspection alone.
+
+## Choose the requested mode
+
+- **Audit:** inspect available code and live responses, collect evidence, and deliver findings. A URL-only request does not require repository access or permission to change the site. Stop after the requested diagnosis and reports.
+- **Repair:** audit first, implement the requested fixes, and verify them. Change content or generate images only when relevant and authorized by the request.
+- **Publish:** perform the repair workflow and deploy only when publication is authorized. Verify the production response after deployment; a local pass does not establish production correctness.
+
+Existing authorization remains valid; do not ask for it again. Use steps 1–2 and 8 for an audit. Steps 3–7 guide repairs or recommendations within the selected scope.
 
 ## Operating principles
 
@@ -34,7 +42,7 @@ Treat a public page as a multi-consumer artifact. Compare what a person, a no-Ja
 
 ### 1. Discover the page contract
 
-Inspect the repository before editing. Identify:
+Inspect the repository before editing when it is available. For a URL-only audit, infer what the responses support and label repository/build details not verified. Identify:
 
 - framework and rendering mode;
 - route source, route variants, dynamic parameters, and not-found behavior;
@@ -44,11 +52,11 @@ Inspect the repository before editing. Identify:
 - expected canonical, robots policy, schema type, social image policy, and internal-link cluster;
 - deployment, CDN, cache, and redirect layers that can change the production response.
 
-Write concrete success criteria before implementation. For an indexable public page, require at minimum a final `200`, unique initial-HTML title and description, self-consistent canonical, one useful H1, indexable robots policy, crawlable body content, valid relevant JSON-LD, sitemap and static-render coverage when applicable, internal links, and page-specific social tags.
+Write concrete success criteria before implementation. For an indexable public page, require at minimum a final `200`, unique initial-HTML title and description, self-consistent canonical, one useful H1, indexable robots policy, crawlable body content, valid relevant structured data when applicable, sitemap and static-render coverage when applicable, internal links, and page-specific social tags.
 
 ### 2. Observe the real response
 
-The Node scripts require the `playwright` package. Run them from a directory whose `node_modules` already provides Playwright, or run `npm install` once inside the skill directory (a `package.json` is included) and `npx playwright install chromium` if no Chromium build is present.
+The Node scripts require the dependencies in the included `package.json`. Run `npm ci` from the skill directory and `npx playwright install chromium` if its Chromium build is absent. Resolve the commands below relative to this skill directory; dependencies in an unrelated working directory do not satisfy Node module resolution.
 
 Run the page auditor when Playwright is available. Public-network destinations are enforced by default. Use `--allow-private-network` only for a controlled localhost test and never for an untrusted URL or inside a sensitive network:
 
@@ -62,7 +70,7 @@ node scripts/audit-public-page.mjs \
 
 When a canonical URL is intentionally different from the requested URL, pass the expected preferred URL explicitly with `--expected-canonical`. Otherwise the final URL after redirects is treated as the expected canonical.
 
-The audit compares no-JavaScript and rendered output, uses simulated search, AI-search and social User-Agents, records redirects, checks canonical, social metadata, schema, hreflang and snippet controls, and evaluates robots.txt across AI training, AI-search and user-triggered crawler classes. It also probes llms.txt and soft-404 behavior, measures loaded resources at mobile and desktop viewports, detects meaningful content mounted only after scrolling, and flags response divergence. The JSON is the machine-readable evidence source; the self-contained HTML is the responsive, printable stakeholder report. Use production and local URLs when both matter.
+The audit compares no-JavaScript and rendered output, uses simulated search, AI-search and social User-Agents, records final URLs after redirects, checks canonical, social metadata, schema, hreflang and snippet controls, and evaluates robots.txt across training, training-and-grounding, AI-search and user-triggered controls. It also probes llms.txt and soft-404 behavior, measures loaded resources at mobile and desktop viewports, detects meaningful content mounted only after scrolling, and flags response divergence. The JSON is the machine-readable evidence source; the self-contained HTML is the responsive, printable stakeholder report. Use production and local URLs when both matter.
 
 For a site-wide initial-HTML pass:
 
@@ -119,7 +127,7 @@ First make semantic HTML, links, buttons, labels, forms, landmarks, focus behavi
 
 ### 8. Verify and report
 
-Run the release gates in [verification-and-release-gates.md](references/verification-and-release-gates.md). Report separately:
+Use [verification-and-release-gates.md](references/verification-and-release-gates.md) for the requested environment and page contract. Classify each check as `verified`, `not-verified`, or `not-applicable`. Verified means evidence was collected, not that the check passed. Report missing tools, network failures and absent field data as not verified; a failure to observe is not evidence of health. Report separately:
 
 - verified facts;
 - implemented changes;
@@ -130,7 +138,7 @@ Run the release gates in [verification-and-release-gates.md](references/verifica
 
 Do not declare success because the visual browser looks correct. A page passes the automated scope only when its initial HTML, rendered DOM, simulated crawler responses, social image, and build/deploy artifacts agree. Verified crawler access, field performance, indexing, rankings, rich-result eligibility and AI citations require external evidence.
 
-After presenting the diagnosis, ask whether the user wants a complete technical Markdown handoff for the developer or AI responsible for the site. Do not generate it automatically unless the user requested it or passed `--handoff`. Generate it from the same JSON evidence source:
+Generate a technical Markdown handoff when requested or when `--handoff` was supplied; no additional confirmation is needed. Otherwise an optional handoff offer should not block completion of the diagnosis. Generate it from the same JSON evidence source:
 
 ```bash
 node scripts/generate-technical-handoff.mjs \
@@ -143,7 +151,7 @@ Both audit commands also accept `--handoff /tmp/handoff.md` when the user reques
 
 ## Output format
 
-For audits, preserve the JSON report as the evidence source and generate the self-contained HTML report for review. The HTML must remain neutral throughout the report body, place methodology branding only in the footer, escape all audited values, work without external assets, support mobile and print layouts, and retain expandable technical evidence. Use the Markdown handoff as the execution document after user confirmation. It may be regenerated from an existing JSON report:
+For audits, preserve the JSON report as the evidence source and generate the self-contained HTML report for review. The HTML must remain neutral throughout the report body, place methodology branding only in the footer, escape all audited values, work without external assets, support mobile and print layouts, and retain expandable technical evidence. Use the requested Markdown handoff as the execution document. It may be regenerated from an existing JSON report:
 
 ```bash
 node scripts/render-html-report.mjs \

@@ -2,7 +2,7 @@
 
 Verify current guidance before making time-sensitive claims. Prefer these primary sources.
 
-Last reviewed: 2026-08-08.
+Source catalog: 2026-08-08. Robots/indexing and Google-Extended guidance rechecked 2026-09-05; other entries retain their previous review date.
 
 ## Search and rendering
 
@@ -25,6 +25,9 @@ Last reviewed: 2026-08-08.
 - Bing index and grounding: https://blogs.bing.com/search/May-2026/Evolving-role-of-the-index-From-ranking-pages-to-supporting-answers
 
 ## Crawler identities and controls
+
+- Google robots.txt status handling and rule matching: https://developers.google.com/crawling/docs/robots-txt/robots-txt-spec
+- Google-Extended training and grounding control: https://developers.google.com/crawling/docs/crawlers-fetchers/google-common-crawlers#google-extended
 
 - Google crawler list: https://developers.google.com/search/docs/crawling-indexing/overview-google-crawlers
 - Google robots meta and snippet controls: https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag

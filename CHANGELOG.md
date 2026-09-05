@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented here.
 
+## Unreleased
+
+- Combine duplicate and crawler-specific indexing directives, including scoped HTTP headers.
+- Distinguish unavailable robots policies from absent rules, preserve crawler exceptions, and normalize UTF-8 paths.
+- Check robots policy at the final URL after redirects and label Google-Extended as training and grounding.
+- Accept JSON-LD graph envelopes without requiring a type on the container.
+- Preserve site-level sitemap findings in HTML and Markdown, including legacy lastmod evidence.
+- Record verification coverage and reduce confidence when automated observations are incomplete.
+- Separate audit, repair and authorized publication modes; remove unsupported llms.txt statistics.
+- Add regression tests for indexing, robots, valid graphs and report consistency.
+
 ## 2.0.0 - 2026-08-08
 
 - Prevent false passes when canonical URLs disagree with the expected final URL.

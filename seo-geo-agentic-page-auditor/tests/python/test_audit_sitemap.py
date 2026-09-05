@@ -61,6 +61,23 @@ class SitemapAuditTests(unittest.TestCase):
                 result = AUDIT.audit_url(str(page), 2)
                 self.assertEqual(result["issues"].count("noindex-in-sitemap"), 1)
 
+    def test_specific_and_duplicate_meta_directives_block_sitemap_indexing(self):
+        for tags in (
+            '<meta name="robots" content="index"><meta name="robots" content="noindex">',
+            '<meta name="robots" content="index"><meta name="googlebot" content="noindex">',
+            '<meta name="bingbot" content="none">',
+        ):
+            with self.subTest(tags=tags), tempfile.TemporaryDirectory() as directory:
+                page = Path(directory) / "page.html"
+                page.write_text(f'<html><head>{tags}</head><body>Content</body></html>', encoding="utf-8")
+                self.assertIn("noindex-in-sitemap", AUDIT.audit_url(str(page), 2)["issues"])
+
+    def test_header_scope_does_not_leak_between_crawlers(self):
+        header = "otherbot: noindex\nmax-snippet: 0, googlebot: none"
+        self.assertNotIn("noindex", AUDIT.indexing_directives({}, header, "googlebot"))
+        self.assertIn("none", AUDIT.indexing_directives({}, header, "googlebot"))
+        self.assertNotIn("none", AUDIT.indexing_directives({}, header, "bingbot"))
+
 
 if __name__ == "__main__":
     unittest.main()

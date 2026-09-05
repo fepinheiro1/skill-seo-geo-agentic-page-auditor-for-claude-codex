@@ -6,6 +6,7 @@ import gzip
 import io
 import ipaddress
 import json
+import re
 import shutil
 import socket
 import ssl
@@ -163,6 +164,10 @@ def fetch_bytes(location, timeout, max_bytes=MAX_PAGE_BYTES, allow_private=False
 
         status = getattr(response, "status", None) or response.getcode()
         headers = dict(response.headers.items())
+        # Preserve every indexing header; dict conversion alone drops earlier
+        # fields, which can hide a noindex behind a later permissive directive.
+        if response.headers.get_all("X-Robots-Tag"):
+            headers["X-Robots-Tag"] = "\n".join(response.headers.get_all("X-Robots-Tag"))
         if status in {301, 302, 303, 307, 308}:
             location_header = response.headers.get("Location")
             if not location_header:
@@ -232,6 +237,20 @@ def sitemap_urls(location, timeout, allow_private=False, retries=2, seen=None):
     return [entry["url"] for entry in sitemap_entries(location, timeout, allow_private, retries, seen)]
 
 
+def indexing_directives(meta, header, user_agent):
+    values = list(meta.get("robots", [])) + list(meta.get(user_agent, []))
+    for line in header.lower().split("\n"):
+        scope = ""
+        for part in line.split(","):
+            directive = part.strip()
+            prefix = re.match(r"^([a-z][a-z0-9_-]*|\*):\s*(.*)$", directive)
+            if prefix and prefix[1] not in {"max-snippet", "max-image-preview", "max-video-preview", "unavailable_after"}:
+                scope, directive = prefix[1], prefix[2]
+            if scope in {"", "*", user_agent}:
+                values.append(directive)
+    return [token for value in values for token in re.split(r"[,\s]+", value.lower()) if token]
+
+
 def audit_url(url, timeout, allow_private=False, retries=2):
     result = {"url": url, "status": None, "finalUrl": None, "issues": []}
     try:
@@ -297,8 +316,12 @@ def audit_url(url, timeout, allow_private=False, retries=2):
             "jsonLdErrors": json_ld_errors,
             "jsonLdSemanticIssues": json_ld_semantic_issues,
         })
-        robots_tokens = {token.strip() for token in robots.lower().replace(",", " ").split()}
-        if "noindex" in robots_tokens or "none" in robots_tokens:
+        indexing = {
+            agent: indexing_directives(parser.meta, headers.get("X-Robots-Tag", headers.get("x-robots-tag", "")), agent)
+            for agent in ("googlebot", "bingbot")
+        }
+        result["indexingDirectives"] = indexing
+        if any("noindex" in tokens or "none" in tokens for tokens in indexing.values()):
             result["issues"].append("noindex-in-sitemap")
         if not title:
             result["issues"].append("missing-title")
@@ -448,7 +471,8 @@ def main():
         if top_count / len(lastmods) > 0.8:
             site_issues.append({
                 "code": "lastmod-uniform",
-                "detail": f"{top_count} of {len(lastmods)} lastmod values are identical ({top_value}); this pattern suggests build-time stamping instead of real modification dates.",
+                "severity": "MEDIUM",
+                "message": f"{top_count} of {len(lastmods)} lastmod values are identical ({top_value}); this pattern suggests build-time stamping instead of real modification dates.",
             })
     report = {
         "reportVersion": 2,
@@ -468,7 +492,7 @@ def main():
     output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"Audited {len(urls)} sitemap URLs; {report['failingUrlCount']} have findings.")
     for site_issue in site_issues:
-        print(f"[SITE] {site_issue['code']}: {site_issue['detail']}")
+        print(f"[SITE] {site_issue['code']}: {site_issue['message']}")
     print(f"Report: {output}")
     render_optional_outputs(args, output)
     return 1 if any(any(is_release_blocking_issue(issue) for issue in result["issues"]) for result in results) else 0

@@ -5,7 +5,7 @@ import path from 'node:path';
 import process from 'node:process';
 import { chromium } from 'playwright';
 import { auditStructuredData } from '../lib/schema-audit.mjs';
-import { evaluateRobots, parseRobots } from '../lib/robots-policy.mjs';
+import { evaluatePageRobots, evaluateRobots, parseRobots, robotsAvailability } from '../lib/robots-policy.mjs';
 import { assertSafePublicUrl, createUrlGuard, defaultCanonicalFor, safeFetch, sameUrl } from '../lib/url-safety.mjs';
 import { renderTechnicalHandoff } from './generate-technical-handoff.mjs';
 import { renderHtmlReport } from './render-html-report.mjs';
@@ -43,10 +43,8 @@ const USER_AGENTS = [
   { name: 'linkedin', value: 'LinkedInBot/1.0' },
 ];
 
-// Crawler classes matter because blocking them has opposite consequences:
-// blocking training crawlers is a legitimate content policy; blocking AI-search
-// crawlers removes the site from AI answers; blocking user-triggered fetchers
-// breaks live page opens from assistants (and they may not honor robots.txt).
+// Provider controls differ: Google-Extended covers training and grounding.
+// Robots policy is evidence of access preferences, not proof of citation outcomes.
 const AI_CRAWLER_ROSTER = [
   { token: 'Googlebot', class: 'search' },
   { token: 'Bingbot', class: 'search' },
@@ -55,7 +53,7 @@ const AI_CRAWLER_ROSTER = [
   { token: 'PerplexityBot', class: 'ai-search' },
   { token: 'GPTBot', class: 'ai-training' },
   { token: 'ClaudeBot', class: 'ai-training' },
-  { token: 'Google-Extended', class: 'ai-training' },
+  { token: 'Google-Extended', class: 'training-and-grounding' },
   { token: 'Applebot-Extended', class: 'ai-training' },
   { token: 'Meta-ExternalAgent', class: 'ai-training' },
   { token: 'CCBot', class: 'ai-training' },
@@ -111,14 +109,19 @@ const guardUrl = createUrlGuard({ allowPrivateNetwork });
 const browser = await chromium.launch({ headless: true });
 
 try {
-  const [noJs, origin] = await Promise.all([
-    Promise.all(USER_AGENTS.map((userAgent) => inspectNoJavaScript(browser, targetUrl, userAgent, guardUrl, args.locale))),
-    inspectOrigin(targetUrl, guardUrl),
-  ]);
-
+  const noJs = await Promise.all(USER_AGENTS.map((userAgent) => inspectNoJavaScript(browser, targetUrl, userAgent, guardUrl, args.locale)));
+  for (const entry of noJs) {
+    const token = { 'browser-no-js': '', 'googlebot-smartphone': 'googlebot', facebook: 'facebookexternalhit', 'x-twitter': 'twitterbot', linkedin: 'linkedinbot' }[entry.userAgent] ?? entry.userAgent;
+    entry.indexing = entry.document
+      ? evaluatePageRobots(entry.document.meta, entry.responseHeaders['x-robots-tag'], token)
+      : null;
+  }
+  const baselineFinalUrl = noJs.find((entry) => entry.userAgent === 'browser-no-js')?.finalUrl;
+  // A redirect can change both host and path; evaluate the destination's rules.
+  const originTarget = /^https?:/.test(baselineFinalUrl || '') ? baselineFinalUrl : targetUrl;
+  const origin = await inspectOrigin(originTarget, guardUrl);
   const rendered = await inspectRendered(browser, targetUrl, args.screenshot, guardUrl, args.locale);
   const renderedDesktop = await inspectDesktopResources(browser, targetUrl, guardUrl, args.locale);
-  const baselineFinalUrl = noJs.find((entry) => entry.userAgent === 'browser-no-js')?.finalUrl;
   const expectedCanonical = declaredExpectedCanonical || defaultCanonicalFor(baselineFinalUrl || targetUrl);
   const robotsTxt = origin?.robotsTxt || null;
   const auditInput = { targetUrl, expectedCanonical, noJs, rendered, renderedDesktop, origin, robotsTxt };
@@ -143,6 +146,7 @@ try {
       networkSafety: allowPrivateNetwork ? 'private-network-opt-in' : 'public-network-only',
     },
   };
+  report.checks = checksFor(report);
   report.confidence = confidenceFor(report);
 
   if (args.out) {
@@ -251,7 +255,7 @@ async function inspectOrigin(url, guard) {
   };
 
   const [robotsTxt, notFoundProbe, llmsTxt] = await Promise.all([
-    fetchInfo(new URL('/robots.txt', base.origin).toString(), 200000),
+    fetchInfo(new URL('/robots.txt', base.origin).toString(), 512000),
     fetchInfo(new URL('/seo-audit-missing-page-probe-3f9a1c', base.origin).toString()),
     fetchInfo(new URL('/llms.txt', base.origin).toString(), 2000),
   ]);
@@ -262,14 +266,15 @@ async function inspectOrigin(url, guard) {
     llmsTxt.note = 'Returned HTML, not Markdown; likely the SPA fallback rather than a real llms.txt.';
   }
 
-  const groups = robotsTxt.status === 200 ? parseRobots(robotsTxt.bodySample) : [];
-  robotsTxt.evaluations = robotsTxt.status === 200
+  robotsTxt.availability = robotsAvailability(robotsTxt.status);
+  const groups = robotsTxt.availability === 'available' ? parseRobots(robotsTxt.bodySample) : [];
+  robotsTxt.evaluations = robotsTxt.availability !== 'unavailable'
     ? USER_AGENTS.map((userAgent) => ({
         userAgent: userAgent.name,
         ...evaluateRobots(groups, userAgent.value, url),
       }))
     : [];
-  const aiCrawlerPolicy = robotsTxt.status === 200
+  const aiCrawlerPolicy = robotsTxt.availability !== 'unavailable'
     ? AI_CRAWLER_ROSTER.map((crawler) => {
         const verdict = evaluateRobots(groups, crawler.token, url);
         return {
@@ -282,10 +287,6 @@ async function inspectOrigin(url, guard) {
       })
     : null;
   return { robotsTxt, notFoundProbe, llmsTxt, aiCrawlerPolicy };
-}
-
-function robotsDisallowsAll(body, targetUrl) {
-  return !evaluateRobots(parseRobots(body), 'generic-crawler', targetUrl).allowed;
 }
 
 async function inspectRendered(browserInstance, url, screenshotPath, guard, locale) {
@@ -532,7 +533,7 @@ async function collectDocument(page, inspectSocialImage) {
     };
     const meta = {};
     for (const element of document.querySelectorAll('meta[name], meta[property]')) {
-      const key = element.getAttribute('name') || element.getAttribute('property');
+      const key = (element.getAttribute('name') || element.getAttribute('property')).toLowerCase();
       meta[key] ||= [];
       meta[key].push(element.getAttribute('content') || '');
     }
@@ -637,22 +638,37 @@ function analyze(report) {
     else if (entry.status !== 200) add('BLOCKER', 'crawler-non-200', `${entry.userAgent} received HTTP ${entry.status}.`, entry.finalUrl);
   }
 
+  for (const entry of report.noJs) {
+    const indexing = entry.indexing;
+    if (indexing?.noindex) {
+      add('BLOCKER', 'noindex', `${entry.userAgent} received directives that block indexing.`, { userAgent: entry.userAgent, directives: indexing.directives });
+    }
+    if (indexing?.nosnippet) {
+      add('HIGH', 'snippet-restricted', `${entry.userAgent} received snippet restrictions; Google applies these to previews and direct input for AI answers.`, { userAgent: entry.userAgent, directives: indexing.directives });
+    } else if (indexing?.maxSnippet > 0 && indexing.maxSnippet < 50) {
+      add('LOW', 'snippet-limited', `max-snippet limits previews to ${indexing.maxSnippet} characters; confirm this restriction is intentional, because it also constrains AI answers.`, { userAgent: entry.userAgent, directives: indexing.directives });
+    }
+  }
+  if (report.rendered?.error || report.rendered?.status !== 200 || !report.rendered?.document) {
+    add('HIGH', 'rendered-fetch-failed', 'The mobile rendered page could not be verified.', report.rendered?.error || report.rendered?.status);
+  }
+  if (report.renderedDesktop?.error) {
+    add('MEDIUM', 'desktop-fetch-failed', 'The desktop resource check could not be completed.', report.renderedDesktop.error);
+  }
+
   const robotsTxt = report.origin?.robotsTxt;
   if (robotsTxt) {
-    if (robotsTxt.status === 200 && robotsDisallowsAll(robotsTxt.bodySample, report.targetUrl)) {
-      add('BLOCKER', 'robots-disallow-all', 'robots.txt disallows the entire site for all crawlers.', robotsTxt.url);
-    } else if (robotsTxt.status !== 200) {
-      add('LOW', 'robots-txt-unavailable', `robots.txt did not return 200 (got ${robotsTxt.status ?? robotsTxt.error}). Crawlers assume allow-all, but sitemap discovery through robots.txt is unavailable.`, robotsTxt.url);
-    }
-    if (robotsTxt.status === 200 && !/^\s*sitemap\s*:/im.test(robotsTxt.bodySample)) {
+    if (robotsTxt.availability === 'unavailable') {
+      add('HIGH', 'robots-unavailable', 'robots.txt could not be evaluated; Google may pause crawling or reuse cached rules. Do not assume access is allowed.', { status: robotsTxt.status, error: robotsTxt.error, url: robotsTxt.url });
+    } else if (robotsTxt.availability === 'absent') {
+      add('LOW', 'robots-txt-unavailable', `robots.txt returned HTTP ${robotsTxt.status}. Google treats this as absent rules; sitemap discovery through this file is unavailable.`, robotsTxt.url);
+    } else if (!/^\s*sitemap\s*:/im.test(robotsTxt.bodySample)) {
       add('LOW', 'sitemap-not-in-robots', 'robots.txt does not declare a Sitemap: line.', robotsTxt.url);
     }
   }
 
-  // When robots.txt disallows the whole site, the disallow-all BLOCKER already
-  // covers every crawler class; per-class issues would only add noise.
-  const disallowAll = robotsTxt?.status === 200 && robotsDisallowsAll(robotsTxt.bodySample, report.targetUrl);
-  const policy = disallowAll ? null : report.origin?.aiCrawlerPolicy;
+  // Evaluate each declared crawler: wildcard restrictions can have exceptions.
+  const policy = report.origin?.aiCrawlerPolicy;
   if (policy) {
     const blockedBy = (klass) => policy.filter((entry) => entry.class === klass && !entry.allowed);
     const searchBlocked = blockedBy('search');
@@ -661,7 +677,7 @@ function analyze(report) {
     }
     const aiSearchBlocked = blockedBy('ai-search');
     if (aiSearchBlocked.length) {
-      add('HIGH', 'ai-search-crawler-blocked', `robots.txt blocks AI search crawlers (${aiSearchBlocked.map((entry) => entry.crawler).join(', ')}); the page cannot be cited by those AI answer engines.`, aiSearchBlocked);
+      add('HIGH', 'ai-search-crawler-blocked', `robots.txt blocks AI search crawlers (${aiSearchBlocked.map((entry) => entry.crawler).join(', ')}); this limits crawling for AI search and may reduce discovery or citations.`, aiSearchBlocked);
     }
     const fetcherBlocked = blockedBy('user-fetch');
     if (fetcherBlocked.length) {
@@ -677,19 +693,6 @@ function analyze(report) {
 
   if (!baseline?.document) return dedupeIssues(issues);
   const initial = baseline.document;
-  const robots = `${first(initial.meta.robots)} ${baseline.responseHeaders['x-robots-tag'] || ''}`.toLowerCase();
-  if (robots.includes('noindex') || /(^|[,\s])none([,\s]|$)/.test(robots)) add('BLOCKER', 'noindex', 'The initial response blocks indexing.', robots.trim());
-
-  // Snippet controls govern both classic previews and Google AI features
-  // (AI Overviews / AI Mode): restricting them silently removes the page from
-  // AI answers as well.
-  const maxSnippetMatch = robots.match(/max-snippet\s*:\s*(-?\d+)/);
-  const maxSnippet = maxSnippetMatch ? Number(maxSnippetMatch[1]) : null;
-  if (/(^|[\s,])nosnippet\b/.test(robots) || maxSnippet === 0) {
-    add('HIGH', 'snippet-restricted', 'Snippet controls (nosnippet or max-snippet:0) remove this page from search previews and Google AI answers.', robots.trim());
-  } else if (maxSnippet !== null && maxSnippet > 0 && maxSnippet < 50) {
-    add('LOW', 'snippet-limited', `max-snippet limits previews to ${maxSnippet} characters; confirm this restriction is intentional, because it also constrains AI answers.`, robots.trim());
-  }
   if (initial.dataNosnippetCount > 0) {
     add('LOW', 'data-nosnippet-present', `${initial.dataNosnippetCount} elements use data-nosnippet; their text is excluded from previews and AI answers. Confirm the exclusion is intentional.`);
   }
@@ -833,6 +836,21 @@ function outcomeFor(issues) {
   return 'PASS';
 }
 
+function checksFor(report) {
+  const status = (verified) => verified ? 'verified' : 'not-verified';
+  return [
+    { id: 'initial-html', status: status(Boolean(report.noJavaScript?.find((entry) => entry.userAgent === 'browser-no-js')?.document)) },
+    { id: 'simulated-crawler-responses', status: status(report.noJavaScript?.every((entry) => !entry.error && entry.document)) },
+    { id: 'robots-policy', status: status(report.robotsTxt?.availability === 'available' || report.robotsTxt?.availability === 'absent') },
+    { id: 'mobile-rendering', status: status(!report.rendered?.error && report.rendered?.status === 200 && report.rendered?.document) },
+    { id: 'desktop-resources', status: status(!report.renderedDesktop?.error && report.renderedDesktop?.totals) },
+    { id: 'social-image', status: !report.rendered?.document ? 'not-verified' : report.rendered.document.ogImage ? status(report.rendered.document.ogImage.loaded) : 'not-applicable' },
+    { id: 'verified-crawler-origin', status: 'not-verified', scope: 'external' },
+    { id: 'field-performance', status: 'not-verified', scope: 'external' },
+    { id: 'indexing-and-citations', status: 'not-verified', scope: 'external' },
+  ];
+}
+
 function confidenceFor(report) {
   const limitations = [
     'Crawler checks use simulated User-Agent headers from the audit machine; they do not prove requests from verified crawler IP ranges.',
@@ -840,10 +858,9 @@ function confidenceFor(report) {
     'Structured data checks cover syntax and common semantic consistency; use official validators and human review for final eligibility.',
     'The audit does not prove indexing, ranking, rich results or AI citations.',
   ];
-  const reasons = [];
-  if (report.noJavaScript?.some((entry) => entry.error || entry.status == null)) reasons.push('One or more simulated crawler requests failed.');
-  if (report.robotsTxt?.error) reasons.push('robots.txt could not be evaluated.');
-  if (!report.rendered?.document) reasons.push('The rendered document could not be collected.');
+  const reasons = report.checks
+    .filter((check) => check.scope !== 'external' && check.status === 'not-verified')
+    .map((check) => `${check.id}: not verified.`);
   return {
     level: reasons.length ? 'MEDIUM' : 'HIGH',
     basis: 'automated-technical-evidence',

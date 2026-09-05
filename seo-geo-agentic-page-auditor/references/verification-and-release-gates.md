@@ -12,6 +12,8 @@
 
 ## Required environments
 
+Apply these gates to the user's requested mode and the page's intended indexing policy. An audit may finish with documented findings or unverified checks; it does not authorize fixes or deployment. A private or intentionally excluded URL must not be made indexable just to pass the public-page CLI.
+
 Test the built artifact, not only a development server. For important routes, test:
 
 - local production build or preview;
@@ -28,7 +30,7 @@ Fail release for an indexable public page when any applies:
 - final response is not `200`;
 - WAF/CDN challenge or crawler-specific `403`/`429` occurs;
 - redirect loop or unstable URL mutation occurs;
-- initial HTML has `noindex` or conflicting robots directives;
+- any applicable initial-response meta or HTTP directive blocks intended indexing, including duplicate tags and crawler-specific rules;
 - canonical is missing, conflicting, malformed, or points to the wrong page;
 - initial HTML is only a generic app shell;
 - title, H1, or main content describes another route;
@@ -48,6 +50,8 @@ Require:
 - page-specific OG/Twitter metadata in initial HTML;
 - social image is public, correct MIME, 1200x630, nonblank, and legible as a thumbnail;
 - robots.txt and infrastructure allow intended search/AI/social crawlers.
+
+Combine all applicable meta robots and X-Robots-Tag directives per crawler, honoring the most restrictive rule. Evaluate robots.txt at the final URL, preserving specific User-Agent exceptions. Ordinary 4xx responses except 429 mean absent rules for Google; 429, 5xx and transport failures leave policy unavailable and may interrupt crawling. Source: [Google robots.txt behavior](https://developers.google.com/crawling/docs/robots-txt/robots-txt-spec#handling-of-errors-and-http-status-codes), checked 2026-09-05.
 
 Length ranges are warnings, not blockers, unless copy is visibly truncated or loses meaning.
 
@@ -100,6 +104,10 @@ Do not mark a production task complete before the deployed response is checked. 
 
 ```text
 Automated outcome: PASS | CONDITIONAL PASS | NEEDS FIXES | FAIL
+
+Check coverage: verified | not-verified | not-applicable
+- verified means measured/evaluated, not necessarily passing
+- external indexing, citations and field performance remain not verified without external evidence
 
 Blockers:
 - ...
